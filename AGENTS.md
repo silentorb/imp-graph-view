@@ -4,7 +4,16 @@
 
 **Imp Translator** — bidirectional conversion between Imp `Graph` and React Flow `{ nodes, edges }`. Uses `@xyflow/react` for **types** (`Node`, `Edge`); this package does not ship React components.
 
-## Layout
+## Consumers
+
+Supported / intended hosts:
+
+- **Imp Lab Tauri** — consumes this package directly.
+- **[Tome](https://github.com/silentorb/tome)** — today via the twin [`imp-react-flow`](https://github.com/silentorb/imp-ts/tree/main/packages/imp-react-flow) package with the same converter contract; treat Tome as a consumer this package must remain compatible with.
+
+Do **not** add a package dependency on Tome. Preserve Imp ↔ RF converter semantics unless intentionally versioning a breaking change Tome can adopt. Layout and UI stay host concerns (Lab may use client ELK in Tauri; Tome currently keeps ELK server-side for diagrams and does not auto-layout its Imp RF canvas—do not assume client ELK is free for the web app). Imp stays free of layout/UI fields; converters inject `{0,0}` and drop positions on the way back.
+
+## Package layout
 
 | Path | Contents |
 | --- | --- |
