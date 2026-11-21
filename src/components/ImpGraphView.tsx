@@ -36,6 +36,11 @@ import {
   type CatalogInputPort,
   type CatalogOutputPort,
 } from "../edit/slots"
+import {
+  layoutReadyForGraph,
+  nodesMatchGraph,
+  nodesReflectLayout,
+} from "../layoutReady"
 import { ImpNode, type ImpFlowNode, type ImpNodeData } from "./ImpNode"
 
 export type ResolvePorts = (
@@ -65,9 +70,14 @@ export type ImpGraphViewProps = {
   nodeTypes?: NodeTypes
   className?: string
   style?: CSSProperties
-  /** Fit view when a new document identity is loaded (default true). */
+  /**
+   * Fit view when a new graph topology is loaded (default true).
+   * If the host passes a layout map that is not yet ready, fit again when boxes arrive.
+   */
   fitViewOnLoad?: boolean
 }
+
+const FIT_PADDING = 0.2
 
 function layoutLookup(
   layout: ImpGraphViewProps["layout"],
@@ -76,6 +86,15 @@ function layoutLookup(
   if (!layout) return undefined
   if (layout instanceof Map) return layout.get(id)
   return (layout as Record<string, LayoutBox>)[id]
+}
+
+function scheduleFitView(fitView: (opts: { padding: number }) => unknown) {
+  // Double rAF: wait until React Flow has committed the latest node positions.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      void fitView({ padding: FIT_PADDING })
+    })
+  })
 }
 
 function graphTopologyKey(graph: Graph): string {
@@ -207,6 +226,8 @@ function ImpGraphViewInner({
 
   const lastEmittedKey = useRef<string | null>(null)
   const loadedKey = useRef<string | null>(null)
+  const pendingFitRef = useRef(false)
+  const rootRef = useRef<HTMLDivElement>(null)
 
   const [nodes, setNodes] = useState<ImpFlowNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -322,11 +343,45 @@ function ImpGraphViewInner({
     setEdges(displayEdges)
 
     if (fitViewOnLoad && isNewLoad && Object.keys(graph.nodes).length > 0) {
-      queueMicrotask(() => {
-        void fitView({ padding: 0.2 })
-      })
+      // Fit only after a later render where `nodes` reflect ready layout (see below).
+      pendingFitRef.current = true
+    } else if (isNewLoad) {
+      pendingFitRef.current = false
     }
-  }, [fitView, fitViewOnLoad, graph, layout, onReorderVariadic, resolvePorts])
+  }, [fitViewOnLoad, graph, layout, onReorderVariadic, resolvePorts])
+
+  // Fit after node state has laid-out positions — never in the same turn as setNodes.
+  // If the pane is still 0×0 (hidden tab), keep pending and fit on resize.
+  useEffect(() => {
+    if (!pendingFitRef.current || !fitViewOnLoad) return
+    if (!nodesMatchGraph(nodes, graph)) return
+    if (layout !== undefined && !layoutReadyForGraph(layout, graph)) return
+    if (!nodesReflectLayout(nodes, layout)) return
+
+    const paneReady = () => {
+      const el = rootRef.current
+      return !!el && el.clientWidth > 0 && el.clientHeight > 0
+    }
+
+    const runFit = () => {
+      if (!pendingFitRef.current) return
+      if (!paneReady()) return
+      pendingFitRef.current = false
+      scheduleFitView(fitView)
+    }
+
+    runFit()
+    if (!pendingFitRef.current) return
+
+    const el = rootRef.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const ro = new ResizeObserver(() => {
+      runFit()
+      if (!pendingFitRef.current) ro.disconnect()
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [fitView, fitViewOnLoad, graph, layout, nodes])
 
   const nodeTypes = useMemo<NodeTypes>(
     () => nodeTypesOverride ?? { imp: ImpNode },
@@ -436,14 +491,22 @@ function ImpGraphViewInner({
 
   if (empty) {
     return (
-      <div className={className ? `imp-gv-root ${className}` : "imp-gv-root"} style={style}>
+      <div
+        ref={rootRef}
+        className={className ? `imp-gv-root ${className}` : "imp-gv-root"}
+        style={style}
+      >
         <div className="imp-gv-empty">Empty Imp graph</div>
       </div>
     )
   }
 
   return (
-    <div className={className ? `imp-gv-root ${className}` : "imp-gv-root"} style={style}>
+    <div
+      ref={rootRef}
+      className={className ? `imp-gv-root ${className}` : "imp-gv-root"}
+      style={style}
+    >
       <ReactFlow
         className="imp-gv-flow"
         nodes={nodes}
@@ -462,7 +525,7 @@ function ImpGraphViewInner({
         panOnDrag
         zoomOnScroll
         proOptions={{ hideAttribution: true }}
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={{ padding: FIT_PADDING }}
         minZoom={0.1}
       >
         <Background gap={16} size={1} />

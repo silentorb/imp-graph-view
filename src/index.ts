@@ -52,3 +52,8 @@ export {
   type ResolvePorts,
   type LayoutBox,
 } from "./components/ImpGraphView"
+export {
+  layoutReadyForGraph,
+  nodesMatchGraph,
+  nodesReflectLayout,
+} from "./layoutReady"
