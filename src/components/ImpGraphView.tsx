@@ -91,6 +91,11 @@ export type ImpGraphViewProps = {
   fitViewKey?: string
   /** Session selection for host chrome (Properties pane, etc.). */
   onSelectionChange?: (selection: GraphSelection) => void
+  /**
+   * Fired when node positions settle (drag end). Hosts that persist layout
+   * outside Imp (e.g. page-block fences) should store this map.
+   */
+  onLayoutChange?: (layout: Record<string, LayoutBox>) => void
 }
 
 const FIT_PADDING = 0.2
@@ -280,12 +285,15 @@ function ImpGraphViewInner({
   fitViewOnLoad = true,
   fitViewKey,
   onSelectionChange,
+  onLayoutChange,
 }: ImpGraphViewProps) {
   const { fitView } = useReactFlow()
   const onGraphChangeRef = useRef(onGraphChange)
   onGraphChangeRef.current = onGraphChange
   const onSelectionChangeRef = useRef(onSelectionChange)
   onSelectionChangeRef.current = onSelectionChange
+  const onLayoutChangeRef = useRef(onLayoutChange)
+  onLayoutChangeRef.current = onLayoutChange
 
   const lastEmittedKey = useRef<string | null>(null)
   const lastContentKey = useRef<string | null>(null)
@@ -576,6 +584,20 @@ function ImpGraphViewInner({
             emitImp(next, currentEdges)
             return currentEdges
           })
+        }
+        const dragEnded = changes.some(
+          (c) => c.type === "position" && c.dragging === false,
+        )
+        if (dragEnded && onLayoutChangeRef.current) {
+          const nextLayout: Record<string, LayoutBox> = {}
+          for (const node of next) {
+            if (node.data?.missing) continue
+            nextLayout[node.id] = {
+              x: node.position.x,
+              y: node.position.y,
+            }
+          }
+          onLayoutChangeRef.current(nextLayout)
         }
         return next
       })

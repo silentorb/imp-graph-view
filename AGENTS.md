@@ -9,7 +9,7 @@ Peers: `react`, `react-dom`, `@xyflow/react` (supplied by the host; do not nest 
 ## Consumers
 
 - **Imp Lab Tauri** — primary consumer today (thin host: ELK, registry, Add palette, Save).
-- **[Tome](https://github.com/silentorb/tome)** — designed so Tome can adopt later; today Tome still uses twin [`imp-react-flow`](https://github.com/silentorb/imp-ts/tree/main/packages/imp-react-flow) + `tome-react-flow`. Do **not** add a package dependency on Tome.
+- **[Tome](https://github.com/silentorb/tome)** — via thin embed `tome-imp-view` (theme/palette/registry → `resolvePorts`). Do **not** add a package dependency on Tome.
 
 Imp stays free of layout fields; converters inject `{0,0}` and drop positions on the way back. Hosts supply a `layout` map to `ImpGraphView`.
 

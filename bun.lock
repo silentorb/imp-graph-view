@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "imp-graph-view",
@@ -7,8 +8,8 @@
         "imp-core-types": "workspace:^0.5.0",
       },
       "devDependencies": {
-        "@types/react": "^19.1.12",
-        "@types/react-dom": "^19.1.9",
+        "@types/react": "19.0.12",
+        "@types/react-dom": "19.0.4",
         "@xyflow/react": "^12.8.2",
         "bun-types": "^1.4.4",
         "imp-registry": "workspace:^0.5.0",
@@ -89,21 +90,6 @@
         "typescript": "5.8.2",
       },
     },
-    "../imp-ts/packages/imp-react-flow": {
-      "name": "imp-react-flow",
-      "version": "0.5.0",
-      "dependencies": {
-        "imp-core-types": "workspace:^0.5.0",
-      },
-      "devDependencies": {
-        "@xyflow/react": "^12.8.2",
-        "imp-registry": "workspace:^0.5.0",
-        "typescript": "5.8.2",
-      },
-      "peerDependencies": {
-        "@xyflow/react": "^12.0.0",
-      },
-    },
     "../imp-ts/packages/imp-registry": {
       "name": "imp-registry",
       "version": "0.5.0",
@@ -158,9 +144,9 @@
 
     "@types/node": ["@types/node@26.6.6", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog=="],
 
-    "@types/react": ["@types/react@19.3.0", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg=="],
+    "@types/react": ["@types/react@19.0.12", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-V6Ar115dBDrjbtXSrS+/Oruobc+qVbbUxDFC1RSbRqLt5SYvxxyIDrSC85RWml54g+jfNeEMZhEj7wW07ONQhA=="],
 
-    "@types/react-dom": ["@types/react-dom@19.3.0", "", { "peerDependencies": { "@types/react": "^19.3.0" } }, "sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q=="],
+    "@types/react-dom": ["@types/react-dom@19.0.4", "", { "peerDependencies": { "@types/react": "^19.0.0" } }, "sha512-4fSQ8vWFkg+TGhePfUzVmat3eC14TXYSsiiDSLI0dVLsrm9gZFABjPy/Qu6TKgl1tq1Bu1yDsuQgY3A3DOjCcg=="],
 
     "@xyflow/react": ["@xyflow/react@12.12.1", "", { "dependencies": { "@xyflow/system": "0.0.84", "classcat": "^5.0.3", "zustand": "^4.4.0" }, "peerDependencies": { "@types/react": ">=17", "@types/react-dom": ">=17", "react": ">=17", "react-dom": ">=17" }, "optionalPeers": ["@types/react", "@types/react-dom"] }, "sha512-g41OHmP+GL5wDBQKpgYt8AF6RlB4CrABtiStXhCMqdItK6gPdSpsuDk8V0YtdyvIvMPTjDJvkuLkz0JbSYu5Cw=="],
 
@@ -201,8 +187,6 @@
     "imp-graph-resolve": ["imp-graph-resolve@workspace:../imp-ts/packages/imp-graph-resolve"],
 
     "imp-pathing": ["imp-pathing@workspace:../imp-ts/packages/imp-pathing"],
-
-    "imp-react-flow": ["imp-react-flow@workspace:../imp-ts/packages/imp-react-flow"],
 
     "imp-registry": ["imp-registry@workspace:../imp-ts/packages/imp-registry"],
 
