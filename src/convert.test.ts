@@ -78,6 +78,35 @@ describe("imp ↔ React Flow converters", () => {
     expect(reactFlowToImp(nodes, edges)).toEqual(graph)
   })
 
+  test("round-trips optional title and typeArgs", () => {
+    const graph: Graph = {
+      nodes: {
+        a: {
+          id: "a",
+          title: "Alpha",
+          type: "literal",
+          typeArgs: [{ id: "number" }],
+          inputs: { value: 1 },
+        },
+        b: {
+          id: "b",
+          type: "filter",
+          inputs: {},
+        },
+      },
+      edges: {},
+    }
+
+    const { nodes, edges } = impToReactFlow(graph)
+    const nodeA = nodes.find((n) => n.id === "a")
+    expect(nodeA?.data.title).toBe("Alpha")
+    expect(nodeA?.data.typeArgs).toEqual([{ id: "number" }])
+    const nodeB = nodes.find((n) => n.id === "b")
+    expect(nodeB?.data.title).toBeUndefined()
+    expect(nodeB?.data.typeArgs).toBeUndefined()
+    expect(reactFlowToImp(nodes, edges)).toEqual(graph)
+  })
+
   test("reactFlowToImp requires sourceHandle and targetHandle", () => {
     const { nodes } = impToReactFlow({
       nodes: {

@@ -36,14 +36,23 @@ function requireNodeData(node: ImpReactFlowNode): ImpReactFlowNodeData {
 
 /** Convert an Imp graph to React Flow nodes and edges. */
 export function impToReactFlow(graph: Graph): ReactFlowGraph {
-  const nodes: ImpReactFlowNode[] = Object.values(graph.nodes).map((node: ImpNode) => ({
-    id: node.id,
-    type: node.type,
-    position: { ...DEFAULT_POSITION },
-    data: {
+  const nodes: ImpReactFlowNode[] = Object.values(graph.nodes).map((node: ImpNode) => {
+    const data: ImpReactFlowNodeData = {
       inputValues: node.inputs,
-    },
-  }))
+    }
+    if (node.title !== undefined) {
+      data.title = node.title
+    }
+    if (node.typeArgs !== undefined) {
+      data.typeArgs = node.typeArgs
+    }
+    return {
+      id: node.id,
+      type: node.type,
+      position: { ...DEFAULT_POSITION },
+      data,
+    }
+  })
 
   const edges: ImpReactFlowEdge[] = Object.entries(graph.edges).map(([id, edge]) => {
     const rfEdge: ImpReactFlowEdge = {
@@ -70,11 +79,18 @@ export function reactFlowToImp(
   const impNodes: Graph["nodes"] = {}
   for (const node of nodes) {
     const data = requireNodeData(node)
-    impNodes[node.id] = {
+    const impNode: ImpNode = {
       id: node.id,
       type: node.type ?? "",
       inputs: data.inputValues,
     }
+    if (data.title !== undefined) {
+      impNode.title = data.title
+    }
+    if (data.typeArgs !== undefined) {
+      impNode.typeArgs = data.typeArgs
+    }
+    impNodes[node.id] = impNode
   }
 
   const impEdges: Graph["edges"] = {}

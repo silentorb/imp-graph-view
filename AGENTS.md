@@ -18,18 +18,19 @@ Imp stays free of layout fields; converters inject `{0,0}` and drop positions on
 | Path | Contents |
 | --- | --- |
 | `src/convert.ts` | `impToReactFlow`, `reactFlowToImp` (incl. `Edge.order`) |
-| `src/edit/` | Precise helpers: inbound replace, ids, add node, slots, handle encode, connect |
-| `src/components/ImpGraphView.tsx` | Editable RF canvas (Imp in / Imp out) |
-| `src/components/ImpNode.tsx` | Precise port handles (singleton / variadic / dummy) |
+| `src/edit/` | Precise helpers: inbound replace, ids, add/retitle node, slots, handle encode, connect |
+| `src/components/ImpGraphView.tsx` | Editable RF canvas (Imp in / Imp out); `onSelectionChange` for host chrome |
+| `src/components/ImpNode.tsx` | Precise port handles; header shows `title ?? id` with type subtitle |
 | `src/styles.css` | Default canvas/node styles (`imp-graph-view/styles.css`) |
 
 ## Editing semantics
 
 - **Document:** Imp `Graph` via `onGraphChange`.
-- **Session:** RF selection/viewport live inside `ImpGraphView`; layout merges by node id without remounting.
+- **Session:** RF selection/viewport live inside `ImpGraphView` (hosts may observe via `onSelectionChange`); layout merges by node id without remounting.
 - **Precise ports:** singleton connect replaces inbound; variadic expands filled slots + dummy append with `Edge.order`; reorder filled slots rewrites `0..n-1`.
+- **Titles:** converters preserve optional `title` / `typeArgs`; `setNodeTitle` / titled `addImpNode` helpers; node header shows `title ?? id`.
 - **Missing endpoints:** dangling edge node ids render as `(missing)` stub cards (not written into `Graph.nodes` on emit). Required so React Flow does not crash on incomplete documents.
-- **Deferred:** Simple auto-pair mode, retitle/properties, literal inspectors.
+- **Deferred:** Simple auto-pair mode, literal inspectors.
 
 ## Quick start
 

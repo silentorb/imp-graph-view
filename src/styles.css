@@ -40,6 +40,17 @@
 
 .imp-gv-node-header {
   font-weight: 600;
+  margin-bottom: 2px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.imp-gv-node-type {
+  font-size: 11px;
+  font-weight: 400;
+  color: #aaa;
   margin-bottom: 6px;
   max-width: 180px;
   overflow: hidden;

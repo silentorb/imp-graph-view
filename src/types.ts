@@ -1,6 +1,8 @@
-import type { InputValues } from "imp-core-types"
+import type { InputValues, SignalType } from "imp-core-types"
 
-/** Imp instance input literals stashed on React Flow `node.data` for round-trip. */
+/** Imp instance fields stashed on React Flow `node.data` for round-trip. */
 export interface ImpReactFlowNodeData extends Record<string, unknown> {
   inputValues: InputValues
+  title?: string
+  typeArgs?: SignalType[]
 }

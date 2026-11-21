@@ -1,6 +1,6 @@
 import { memo, useCallback, type DragEvent } from "react"
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
-import type { InputValues } from "imp-core-types"
+import type { InputValues, SignalType } from "imp-core-types"
 import type { InputSlot, OutputSlot } from "../edit/slots"
 
 export type ImpNodeData = {
@@ -8,6 +8,10 @@ export type ImpNodeData = {
   inputValues: InputValues
   inputSlots: InputSlot[]
   outputSlots: OutputSlot[]
+  /** Optional Imp display title; header falls back to node id. */
+  title?: string
+  /** Preserved Imp type arguments for round-trip. */
+  typeArgs?: SignalType[]
   /** Present when this card is a dangling edge endpoint, not in Imp `Graph.nodes`. */
   missing?: boolean
   /** Reorder filled variadic siblings when a slot label is dropped. */
@@ -84,9 +88,14 @@ function ImpNodeComponent({ id, data }: NodeProps<ImpFlowNode>) {
     [data, id],
   )
 
-  const label = data.missing
+  const typeLabel = data.missing
     ? "(missing)"
     : data.impType || "(unknown)"
+  const headerLabel = data.missing
+    ? "(missing)"
+    : data.title?.trim()
+      ? data.title
+      : id
 
   return (
     <div
@@ -97,9 +106,14 @@ function ImpNodeComponent({ id, data }: NodeProps<ImpFlowNode>) {
         boxSizing: "border-box",
       }}
     >
-      <div className="imp-gv-node-header" title={label}>
-        {label}
+      <div className="imp-gv-node-header" title={headerLabel}>
+        {headerLabel}
       </div>
+      {!data.missing ? (
+        <div className="imp-gv-node-type" title={typeLabel}>
+          {typeLabel}
+        </div>
+      ) : null}
       <div className="imp-gv-ports">
         <div className="imp-gv-inputs">
           {data.inputSlots.map((slot) => (

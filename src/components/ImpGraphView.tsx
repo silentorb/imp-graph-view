@@ -19,8 +19,9 @@ import {
   type EdgeChange,
   type NodeChange,
   type NodeTypes,
+  type OnSelectionChangeParams,
 } from "@xyflow/react"
-import type { Graph } from "imp-core-types"
+import type { Graph, SignalType } from "imp-core-types"
 import { impToReactFlow, reactFlowToImp } from "../convert"
 import {
   applyPreciseConnect,
@@ -59,6 +60,11 @@ export type LayoutBox = {
   height?: number
 }
 
+export type GraphSelection = {
+  nodeIds: string[]
+  edgeIds: string[]
+}
+
 export type ImpGraphViewProps = {
   graph: Graph
   onGraphChange?: (graph: Graph) => void
@@ -75,6 +81,8 @@ export type ImpGraphViewProps = {
    * If the host passes a layout map that is not yet ready, fit again when boxes arrive.
    */
   fitViewOnLoad?: boolean
+  /** Session selection for host chrome (Properties pane, etc.). */
+  onSelectionChange?: (selection: GraphSelection) => void
 }
 
 const FIT_PADDING = 0.2
@@ -109,6 +117,20 @@ function graphTopologyKey(graph: Graph): string {
   return `${nodeIds}#${edgeKeys}`
 }
 
+/** Node payload key so title / typeArgs / inputs host edits rebuild RF data. */
+function graphNodeContentKey(graph: Graph): string {
+  return Object.keys(graph.nodes)
+    .sort()
+    .map((id) => {
+      const node = graph.nodes[id]!
+      const title = node.title ?? ""
+      const typeArgs = node.typeArgs ? JSON.stringify(node.typeArgs) : ""
+      const inputs = JSON.stringify(node.inputs)
+      return `${id}:${node.type}:${title}:${typeArgs}:${inputs}`
+    })
+    .join("|")
+}
+
 function flowNodeFromParts(
   id: string,
   impType: string,
@@ -120,6 +142,8 @@ function flowNodeFromParts(
   onReorderVariadic: ImpNodeData["onReorderVariadic"],
   prevSelected: Map<string, boolean>,
   missing: boolean,
+  title?: string,
+  typeArgs?: SignalType[],
 ): ImpFlowNode {
   const ports = resolvePorts(impType, id, edges)
   const inputSlots = expandInputSlots(ports.inputs, graph, id)
@@ -139,6 +163,8 @@ function flowNodeFromParts(
       inputValues,
       inputSlots,
       outputSlots,
+      title: missing ? undefined : title,
+      typeArgs: missing ? undefined : typeArgs,
       missing: missing || undefined,
       onReorderVariadic,
     },
@@ -184,6 +210,8 @@ function buildFlowNodes(
       onReorderVariadic,
       prevSelected,
       false,
+      node.data.title,
+      node.data.typeArgs,
     ),
   )
 
@@ -219,12 +247,16 @@ function ImpGraphViewInner({
   className,
   style,
   fitViewOnLoad = true,
+  onSelectionChange,
 }: ImpGraphViewProps) {
   const { fitView } = useReactFlow()
   const onGraphChangeRef = useRef(onGraphChange)
   onGraphChangeRef.current = onGraphChange
+  const onSelectionChangeRef = useRef(onSelectionChange)
+  onSelectionChangeRef.current = onSelectionChange
 
   const lastEmittedKey = useRef<string | null>(null)
+  const lastContentKey = useRef<string | null>(null)
   const loadedKey = useRef<string | null>(null)
   const pendingFitRef = useRef(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -236,23 +268,48 @@ function ImpGraphViewInner({
     // Missing stub cards are display-only — never write them into Imp Graph.nodes.
     return flowNodes
       .filter((n) => !n.data.missing)
-      .map((n) => ({
-        id: n.id,
-        type: n.data.impType,
-        position: n.position,
-        data: { inputValues: n.data.inputValues },
-      }))
+      .map((n) => {
+        const data: {
+          inputValues: ImpNodeData["inputValues"]
+          title?: string
+          typeArgs?: SignalType[]
+        } = {
+          inputValues: n.data.inputValues,
+        }
+        if (n.data.title !== undefined) {
+          data.title = n.data.title
+        }
+        if (n.data.typeArgs !== undefined) {
+          data.typeArgs = n.data.typeArgs
+        }
+        return {
+          id: n.id,
+          type: n.data.impType,
+          position: n.position,
+          data,
+        }
+      })
   }, [])
 
   const emitImp = useCallback(
     (nextNodes: ImpFlowNode[], nextEdges: Edge[]) => {
       const collapsed = collapseEdgesForImp(nextEdges)
       const imp = reactFlowToImp(toConverterNodes(nextNodes), collapsed)
-      const key = graphTopologyKey(imp)
-      lastEmittedKey.current = key
+      lastEmittedKey.current = graphTopologyKey(imp)
+      lastContentKey.current = graphNodeContentKey(imp)
       onGraphChangeRef.current?.(imp)
     },
     [toConverterNodes],
+  )
+
+  const handleSelectionChange = useCallback(
+    ({ nodes: selectedNodes, edges: selectedEdges }: OnSelectionChangeParams) => {
+      onSelectionChangeRef.current?.({
+        nodeIds: selectedNodes.map((n) => n.id),
+        edgeIds: selectedEdges.map((e) => e.id),
+      })
+    },
+    [],
   )
 
   const onReorderVariadic = useCallback(
@@ -273,6 +330,7 @@ function ImpGraphViewInner({
             return currentEdges
           }
           lastEmittedKey.current = graphTopologyKey(imp)
+          lastContentKey.current = graphNodeContentKey(imp)
           onGraphChangeRef.current?.(imp)
 
           const displayEdges = displayEdgesForGraph(imp, resolvePorts)
@@ -302,8 +360,12 @@ function ImpGraphViewInner({
 
   // External graph / layout sync — skip echoes of our own emits.
   useEffect(() => {
-    const key = graphTopologyKey(graph)
-    if (key === lastEmittedKey.current) {
+    const topoKey = graphTopologyKey(graph)
+    const contentKey = graphNodeContentKey(graph)
+    if (
+      topoKey === lastEmittedKey.current &&
+      contentKey === lastContentKey.current
+    ) {
       // Still merge layout positions without wiping selection.
       setNodes((current) =>
         current.map((n) => {
@@ -322,9 +384,10 @@ function ImpGraphViewInner({
       return
     }
 
-    const isNewLoad = loadedKey.current !== key
-    loadedKey.current = key
-    lastEmittedKey.current = key
+    const isNewLoad = loadedKey.current !== topoKey
+    loadedKey.current = topoKey
+    lastEmittedKey.current = topoKey
+    lastContentKey.current = contentKey
 
     const displayEdges = displayEdgesForGraph(graph, resolvePorts)
     setNodes((current) => {
@@ -489,6 +552,12 @@ function ImpGraphViewInner({
   const empty = Object.keys(graph.nodes).length === 0
   const editable = !readOnly
 
+  useEffect(() => {
+    if (empty) {
+      onSelectionChangeRef.current?.({ nodeIds: [], edgeIds: [] })
+    }
+  }, [empty])
+
   if (empty) {
     return (
       <div
@@ -516,6 +585,7 @@ function ImpGraphViewInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onSelectionChange={handleSelectionChange}
         deleteKeyCode={editable ? ["Backspace", "Delete"] : null}
         nodesDraggable={editable && nodesDraggable}
         nodesConnectable={editable}

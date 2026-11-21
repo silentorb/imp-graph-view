@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { Graph } from "imp-core-types"
 import type { Edge as RfEdge } from "@xyflow/react"
 import { addImpNode } from "./addNode"
+import { setNodeTitle } from "./setNodeTitle"
 import {
   applyPreciseConnect,
   collapseEdgesForImp,
@@ -13,7 +14,7 @@ import {
   encodeDummyHandle,
   encodeVariadicHandle,
 } from "./handles"
-import { uniqueNodeId } from "./ids"
+import { uniqueNodeId, uniqueNodeTitle } from "./ids"
 import { dedupeInboundReactFlowEdges, withoutInboundToPort } from "./inbound"
 import { inferPortsFromEdges } from "./inferPorts"
 import { missingNodeIds } from "./missing"
@@ -58,13 +59,46 @@ describe("ids and addImpNode", () => {
     expect(uniqueNodeId(graph, "sine")).toBe("sine_3")
   })
 
-  test("addImpNode inserts empty inputs", () => {
+  test("addImpNode inserts unique title and empty inputs", () => {
     const graph = addImpNode({ nodes: {}, edges: {} }, "parameter")
     expect(graph.nodes.parameter).toEqual({
       id: "parameter",
+      title: "parameter",
       type: "parameter",
       inputs: {},
     })
+  })
+
+  test("uniqueNodeTitle skips nodes without titles", () => {
+    const graph: Graph = {
+      nodes: {
+        a: { id: "a", type: "sine", inputs: {} },
+        b: { id: "b", title: "sine", type: "sine", inputs: {} },
+      },
+      edges: {},
+    }
+    expect(uniqueNodeTitle(graph, "sine")).toBe("sine_2")
+  })
+})
+
+describe("setNodeTitle", () => {
+  test("sets trims and clears title", () => {
+    let graph: Graph = {
+      nodes: {
+        a: { id: "a", title: "Old", type: "sine", inputs: {} },
+      },
+      edges: {},
+    }
+    graph = setNodeTitle(graph, "a", "  New  ")
+    expect(graph.nodes.a?.title).toBe("New")
+    graph = setNodeTitle(graph, "a", "   ")
+    expect(graph.nodes.a?.title).toBeUndefined()
+    expect("title" in (graph.nodes.a ?? {})).toBe(false)
+  })
+
+  test("returns same graph for missing node", () => {
+    const graph: Graph = { nodes: {}, edges: {} }
+    expect(setNodeTitle(graph, "missing", "x")).toBe(graph)
   })
 })
 

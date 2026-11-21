@@ -11,8 +11,9 @@ export {
   withoutInboundToPort,
   dedupeInboundReactFlowEdges,
 } from "./edit/inbound"
-export { uniqueNodeId, uniqueEdgeId } from "./edit/ids"
+export { uniqueNodeId, uniqueEdgeId, uniqueNodeTitle } from "./edit/ids"
 export { addImpNode } from "./edit/addNode"
+export { setNodeTitle } from "./edit/setNodeTitle"
 export {
   encodeSingletonHandle,
   encodeVariadicHandle,
@@ -49,6 +50,7 @@ export { ImpNode, type ImpNodeData, type ImpFlowNode } from "./components/ImpNod
 export {
   ImpGraphView,
   type ImpGraphViewProps,
+  type GraphSelection,
   type ResolvePorts,
   type LayoutBox,
 } from "./components/ImpGraphView"
