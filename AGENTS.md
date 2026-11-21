@@ -25,8 +25,9 @@ Imp stays free of layout fields; converters inject `{0,0}` and drop positions on
 
 ## Editing semantics
 
-- **Document:** Imp `Graph` via `onGraphChange`.
+- **Document:** Imp `Graph` via `onGraphChange`. Undo/redo belongs in the host (document snapshots), not in this package.
 - **Session:** RF selection/viewport live inside `ImpGraphView` (hosts may observe via `onSelectionChange`); layout merges by node id without remounting.
+- **fitViewKey:** optional host load identity; when set, `fitViewOnLoad` runs only when that key changes (open / new tab), not on every topology edit or undo.
 - **Precise ports:** singleton connect replaces inbound; variadic expands filled slots + dummy append with `Edge.order`; reorder filled slots rewrites `0..n-1`.
 - **Titles:** converters preserve optional `title` / `typeArgs`; `setNodeTitle` / titled `addImpNode` helpers; node header shows `title ?? id`.
 - **Literals:** `setNodeInputLiteral`; on-node editors for unconnected singleton scalar/`any` ports (host supplies `CatalogInputPort.signalType`); hosts may also edit literals in a Properties pane.

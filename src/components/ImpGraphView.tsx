@@ -78,10 +78,17 @@ export type ImpGraphViewProps = {
   className?: string
   style?: CSSProperties
   /**
-   * Fit view when a new graph topology is loaded (default true).
+   * Fit view when a new graph is loaded (default true).
    * If the host passes a layout map that is not yet ready, fit again when boxes arrive.
+   * When `fitViewKey` is set, fit only when that key changes (not on every topology edit).
+   * When unset, fit whenever the topology key changes (legacy).
    */
   fitViewOnLoad?: boolean
+  /**
+   * Host document/load identity. When provided, `fitViewOnLoad` triggers only when
+   * this value changes (e.g. open / new tab), not on connect/undo topology edits.
+   */
+  fitViewKey?: string
   /** Session selection for host chrome (Properties pane, etc.). */
   onSelectionChange?: (selection: GraphSelection) => void
 }
@@ -271,6 +278,7 @@ function ImpGraphViewInner({
   className,
   style,
   fitViewOnLoad = true,
+  fitViewKey,
   onSelectionChange,
 }: ImpGraphViewProps) {
   const { fitView } = useReactFlow()
@@ -282,6 +290,7 @@ function ImpGraphViewInner({
   const lastEmittedKey = useRef<string | null>(null)
   const lastContentKey = useRef<string | null>(null)
   const loadedKey = useRef<string | null>(null)
+  const loadedFitKey = useRef<string | null>(null)
   const pendingFitRef = useRef(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -467,10 +476,18 @@ function ImpGraphViewInner({
       return
     }
 
-    const isNewLoad = loadedKey.current !== topoKey
+    const topologyChanged = loadedKey.current !== topoKey
     loadedKey.current = topoKey
     lastEmittedKey.current = topoKey
     lastContentKey.current = contentKey
+
+    const fitKeyChanged =
+      fitViewKey !== undefined
+        ? loadedFitKey.current !== fitViewKey
+        : topologyChanged
+    if (fitViewKey !== undefined) {
+      loadedFitKey.current = fitViewKey
+    }
 
     const displayEdges = displayEdgesForGraph(graph, resolvePorts)
     setNodes((current) => {
@@ -488,13 +505,21 @@ function ImpGraphViewInner({
     })
     setEdges(displayEdges)
 
-    if (fitViewOnLoad && isNewLoad && Object.keys(graph.nodes).length > 0) {
+    if (fitViewOnLoad && fitKeyChanged && Object.keys(graph.nodes).length > 0) {
       // Fit only after a later render where `nodes` reflect ready layout (see below).
       pendingFitRef.current = true
-    } else if (isNewLoad) {
+    } else if (fitKeyChanged) {
       pendingFitRef.current = false
     }
-  }, [fitViewOnLoad, graph, layout, onInputLiteralChange, onReorderVariadic, resolvePorts])
+  }, [
+    fitViewKey,
+    fitViewOnLoad,
+    graph,
+    layout,
+    onInputLiteralChange,
+    onReorderVariadic,
+    resolvePorts,
+  ])
 
   // Fit after node state has laid-out positions — never in the same turn as setNodes.
   // If the pane is still 0×0 (hidden tab), keep pending and fit on resize.
