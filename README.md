@@ -1,24 +1,24 @@
 # Imp Graph View
 
-Bidirectional converters between Imp graphs and [React Flow](https://reactflow.dev/) (`@xyflow/react`) node/edge arrays.
+Imp ↔ [React Flow](https://reactflow.dev/) converters and an editable **Precise** Imp graph canvas for Lab (and future Tome).
 
-Imp stays free of layout/UI fields. Converters stash Imp `InputValues` on React Flow `node.data.inputValues` so instance literals round-trip. Port templates come from `NodeType` catalogs / the registry.
+- Converters stash Imp `InputValues` on `node.data.inputValues` and round-trip optional `Edge.order`.
+- `ImpGraphView` takes an Imp `Graph`, host `resolvePorts` + optional layout positions, and emits Imp on edit.
+- Layout engines stay in the host (Lab uses ELK).
 
 ```ts
 import type { Graph } from "imp-core-types"
-import { impToReactFlow, reactFlowToImp } from "imp-graph-view"
-
-const { nodes, edges } = impToReactFlow(graph)
-const again = reactFlowToImp(nodes, edges)
+import { ImpGraphView, impToReactFlow, reactFlowToImp } from "imp-graph-view"
+import "imp-graph-view/styles.css"
 ```
 
 ## Local development
 
-Expect a sibling [imp-ts](https://github.com/silentorb/imp-ts) checkout (`../imp-ts`) so Bun workspaces can resolve Imp peers:
+Expect sibling [imp-ts](https://github.com/silentorb/imp-ts) (`../imp-ts`):
 
 ```bash
 bun install
 bun run test
 ```
 
-In **aura-workbench**, run those commands in the **editor-tauri** service (Bun is available there).
+In **aura-workbench**, run those in the **editor-tauri** service.

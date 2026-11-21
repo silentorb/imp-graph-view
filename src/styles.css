@@ -1,0 +1,85 @@
+.imp-gv-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+}
+
+.imp-gv-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.imp-gv-empty {
+  height: 100%;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-size: 13px;
+}
+
+.imp-gv-node {
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: #1e1e1e;
+  color: #eee;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.imp-gv-node-missing {
+  border-color: #b91c1c;
+  background: #450a0a;
+  color: #fecaca;
+}
+
+.imp-gv-node-header {
+  font-weight: 600;
+  margin-bottom: 6px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.imp-gv-ports {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  min-height: 8px;
+}
+
+.imp-gv-inputs,
+.imp-gv-outputs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.imp-gv-outputs {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.imp-gv-port-row {
+  line-height: 1.2;
+  color: #aaa;
+  padding-inline: 4px;
+  user-select: none;
+}
+
+.imp-gv-port-row-variadic {
+  cursor: grab;
+}
+
+.imp-gv-handle {
+  width: 8px;
+  height: 8px;
+  background: #3b82f6;
+  border: 1px solid #1e1e1e;
+}

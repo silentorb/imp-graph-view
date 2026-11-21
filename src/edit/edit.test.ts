@@ -1,0 +1,274 @@
+import { describe, expect, test } from "bun:test"
+import type { Graph } from "imp-core-types"
+import type { Edge as RfEdge } from "@xyflow/react"
+import { addImpNode } from "./addNode"
+import {
+  applyPreciseConnect,
+  collapseEdgesForImp,
+  expandEdgesForDisplay,
+} from "./displayEdges"
+import {
+  canonicalPortId,
+  decodeHandle,
+  encodeDummyHandle,
+  encodeVariadicHandle,
+} from "./handles"
+import { uniqueNodeId } from "./ids"
+import { dedupeInboundReactFlowEdges, withoutInboundToPort } from "./inbound"
+import { inferPortsFromEdges } from "./inferPorts"
+import { missingNodeIds } from "./missing"
+import {
+  expandInputSlots,
+  nextVariadicOrder,
+  reorderVariadicInputs,
+} from "./slots"
+
+describe("inbound helpers", () => {
+  test("withoutInboundToPort drops matching target handle", () => {
+    const edges = [
+      { id: "a", target: "n", targetHandle: "x" },
+      { id: "b", target: "n", targetHandle: "y" },
+      { id: "c", target: "m", targetHandle: "x" },
+    ]
+    expect(withoutInboundToPort(edges, "n", "x").map((e) => e.id)).toEqual([
+      "b",
+      "c",
+    ])
+  })
+
+  test("dedupeInboundReactFlowEdges keeps last per target handle", () => {
+    const edges = [
+      { id: "1", target: "n", targetHandle: "in" },
+      { id: "2", target: "n", targetHandle: "in" },
+      { id: "3", target: "n", targetHandle: "other" },
+    ]
+    expect(dedupeInboundReactFlowEdges(edges).map((e) => e.id)).toEqual([
+      "2",
+      "3",
+    ])
+  })
+})
+
+describe("ids and addImpNode", () => {
+  test("uniqueNodeId increments", () => {
+    let graph: Graph = { nodes: {}, edges: {} }
+    graph = addImpNode(graph, "sine")
+    expect(uniqueNodeId(graph, "sine")).toBe("sine_2")
+    graph = addImpNode(graph, "sine")
+    expect(uniqueNodeId(graph, "sine")).toBe("sine_3")
+  })
+
+  test("addImpNode inserts empty inputs", () => {
+    const graph = addImpNode({ nodes: {}, edges: {} }, "parameter")
+    expect(graph.nodes.parameter).toEqual({
+      id: "parameter",
+      type: "parameter",
+      inputs: {},
+    })
+  })
+})
+
+describe("handles", () => {
+  test("encodes and decodes variadic and dummy", () => {
+    expect(decodeHandle("freq")).toEqual({ kind: "port", portId: "freq" })
+    expect(decodeHandle(encodeVariadicHandle("items", 2))).toEqual({
+      kind: "variadic",
+      portId: "items",
+      order: 2,
+    })
+    expect(decodeHandle(encodeDummyHandle("items"))).toEqual({
+      kind: "dummy",
+      portId: "items",
+    })
+    expect(canonicalPortId(encodeVariadicHandle("items", 1))).toBe("items")
+  })
+})
+
+describe("slots and order", () => {
+  const graph: Graph = {
+    nodes: {
+      a: { id: "a", type: "parameter", inputs: {} },
+      b: { id: "b", type: "parameter", inputs: {} },
+      pack: { id: "pack", type: "pack", inputs: {} },
+    },
+    edges: {
+      e0: {
+        from: { node: "a", port: "value" },
+        to: { node: "pack", port: "items" },
+        order: 0,
+      },
+      e1: {
+        from: { node: "b", port: "value" },
+        to: { node: "pack", port: "items" },
+        order: 1,
+      },
+    },
+  }
+
+  test("expandInputSlots adds filled + dummy for variadic", () => {
+    const slots = expandInputSlots(
+      [{ id: "items", variadic: true }],
+      graph,
+      "pack",
+    )
+    expect(slots.map((s) => s.kind)).toEqual(["variadic", "variadic", "dummy"])
+    expect(slots[0]).toMatchObject({ edgeId: "e0", order: 0 })
+    expect(slots[2]?.handleId).toBe(encodeDummyHandle("items"))
+  })
+
+  test("nextVariadicOrder continues after max", () => {
+    expect(nextVariadicOrder(graph, "pack", "items")).toBe(2)
+  })
+
+  test("reorderVariadicInputs rewrites 0..n-1", () => {
+    const next = reorderVariadicInputs(graph, "pack", "items", ["e1", "e0"])
+    expect(next.edges.e1?.order).toBe(0)
+    expect(next.edges.e0?.order).toBe(1)
+  })
+})
+
+describe("missing endpoints", () => {
+  test("missingNodeIds lists dangling edge endpoints", () => {
+    const graph: Graph = {
+      nodes: {
+        b: { id: "b", type: "loop", inputs: {} },
+      },
+      edges: {
+        e1: {
+          from: { node: "ghost", port: "score" },
+          to: { node: "b", port: "value" },
+        },
+      },
+    }
+    expect(missingNodeIds(graph)).toEqual(["ghost"])
+  })
+})
+
+describe("inferPortsFromEdges", () => {
+  test("single inbound without order is singleton", () => {
+    const edges: RfEdge[] = [
+      {
+        id: "e1",
+        source: "a",
+        target: "b",
+        sourceHandle: "out",
+        targetHandle: "value",
+      },
+    ]
+    expect(inferPortsFromEdges("b", edges).inputs).toEqual([
+      { id: "value", variadic: false },
+    ])
+  })
+
+  test("multi inbound or ordered inbound is variadic", () => {
+    const multi: RfEdge[] = [
+      {
+        id: "e1",
+        source: "a",
+        target: "mix",
+        sourceHandle: "out",
+        targetHandle: "inputs",
+      },
+      {
+        id: "e2",
+        source: "b",
+        target: "mix",
+        sourceHandle: "out",
+        targetHandle: "inputs",
+      },
+    ]
+    expect(inferPortsFromEdges("mix", multi).inputs).toEqual([
+      { id: "inputs", variadic: true },
+    ])
+
+    const ordered: RfEdge[] = [
+      {
+        id: "e1",
+        source: "a",
+        target: "mix",
+        sourceHandle: "out",
+        targetHandle: "inputs",
+        data: { order: 0 },
+      },
+    ]
+    expect(inferPortsFromEdges("mix", ordered).inputs).toEqual([
+      { id: "inputs", variadic: true },
+    ])
+  })
+})
+
+describe("precise connect", () => {
+  test("singleton replace drops prior inbound", () => {
+    const edges: RfEdge[] = [
+      {
+        id: "old",
+        source: "a",
+        target: "b",
+        sourceHandle: "value",
+        targetHandle: "freq",
+      },
+    ]
+    const { edges: next, accepted } = applyPreciseConnect(edges, {
+      source: "c",
+      target: "b",
+      sourceHandle: "value",
+      targetHandle: "freq",
+    })
+    expect(accepted).toBe(true)
+    expect(next).toHaveLength(1)
+    expect(next[0]?.source).toBe("c")
+    expect(next[0]?.targetHandle).toBe("freq")
+  })
+
+  test("variadic dummy appends with order", () => {
+    const edges: RfEdge[] = [
+      {
+        id: "e0",
+        source: "a",
+        target: "pack",
+        sourceHandle: "value",
+        targetHandle: encodeVariadicHandle("items", 0),
+        data: { order: 0 },
+      },
+    ]
+    const { edges: next, accepted } = applyPreciseConnect(edges, {
+      source: "b",
+      target: "pack",
+      sourceHandle: "value",
+      targetHandle: encodeDummyHandle("items"),
+    })
+    expect(accepted).toBe(true)
+    expect(next).toHaveLength(2)
+    const added = next.find((e) => e.id !== "e0")
+    expect(added?.data).toEqual({ order: 1 })
+    expect(added?.targetHandle).toBe(encodeVariadicHandle("items", 1))
+  })
+
+  test("filled variadic slot rejects connect", () => {
+    const { accepted } = applyPreciseConnect([], {
+      source: "a",
+      target: "pack",
+      sourceHandle: "value",
+      targetHandle: encodeVariadicHandle("items", 0),
+    })
+    expect(accepted).toBe(false)
+  })
+
+  test("expand and collapse display edges preserve order", () => {
+    const edges: RfEdge[] = [
+      {
+        id: "e0",
+        source: "a",
+        target: "pack",
+        sourceHandle: "value",
+        targetHandle: "items",
+        data: { order: 0 },
+      },
+    ]
+    const display = expandEdgesForDisplay(edges)
+    expect(display[0]?.targetHandle).toBe(encodeVariadicHandle("items", 0))
+    const collapsed = collapseEdgesForImp(display)
+    expect(collapsed[0]?.targetHandle).toBe("items")
+    expect(collapsed[0]?.data).toEqual({ order: 0 })
+  })
+})

@@ -1,0 +1,5 @@
+# Avoid nesting a second React next to this package (breaks host Vite apps —
+# hooks then hit null: "Cannot read properties of null (reading 'useState')").
+# Hosts / the Lab Tauri workspace supply react, react-dom, and @xyflow/react.
+[install]
+peer = false

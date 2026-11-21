@@ -3,9 +3,10 @@
   "version": "0.5.0",
   "private": true,
   "type": "module",
-  "description": "Bidirectional converters between Imp graphs and React Flow node/edge arrays.",
+  "description": "Imp ↔ React Flow converters and editable Precise Imp graph view.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
   },
   "workspaces": [
     ".",
@@ -19,9 +20,13 @@
     "imp-core-types": "workspace:^0.5.0"
   },
   "peerDependencies": {
-    "@xyflow/react": "^12.0.0"
+    "@xyflow/react": "^12.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
     "@xyflow/react": "^12.8.2",
     "bun-types": "^1.4.4",
     "imp-registry": "workspace:^0.5.0",

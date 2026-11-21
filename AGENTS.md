@@ -2,35 +2,41 @@
 
 ## What it is
 
-**Imp Translator** — bidirectional conversion between Imp `Graph` and React Flow `{ nodes, edges }`. Uses `@xyflow/react` for **types** (`Node`, `Edge`); this package does not ship React components.
+**Imp React graph view** — bidirectional Imp `Graph` ↔ React Flow converters **plus** an editable Precise RF canvas (`ImpGraphView`, `ImpNode`).
+
+Peers: `react`, `react-dom`, `@xyflow/react` (supplied by the host; do not nest a second React under this package — duplicate React makes hooks fail with `Cannot read properties of null (reading 'useState')`). No `imp-registry` dependency — hosts pass `resolvePorts`. Layout engines (e.g. ELK) stay in hosts. Lab Tauri Vite config dedupes/aliases React to the app copy.
 
 ## Consumers
 
-Supported / intended hosts:
+- **Imp Lab Tauri** — primary consumer today (thin host: ELK, registry, Add palette, Save).
+- **[Tome](https://github.com/silentorb/tome)** — designed so Tome can adopt later; today Tome still uses twin [`imp-react-flow`](https://github.com/silentorb/imp-ts/tree/main/packages/imp-react-flow) + `tome-react-flow`. Do **not** add a package dependency on Tome.
 
-- **Imp Lab Tauri** — consumes this package directly.
-- **[Tome](https://github.com/silentorb/tome)** — today via the twin [`imp-react-flow`](https://github.com/silentorb/imp-ts/tree/main/packages/imp-react-flow) package with the same converter contract; treat Tome as a consumer this package must remain compatible with.
-
-Do **not** add a package dependency on Tome. Preserve Imp ↔ RF converter semantics unless intentionally versioning a breaking change Tome can adopt. Layout and UI stay host concerns (Lab may use client ELK in Tauri; Tome currently keeps ELK server-side for diagrams and does not auto-layout its Imp RF canvas—do not assume client ELK is free for the web app). Imp stays free of layout/UI fields; converters inject `{0,0}` and drop positions on the way back.
+Imp stays free of layout fields; converters inject `{0,0}` and drop positions on the way back. Hosts supply a `layout` map to `ImpGraphView`.
 
 ## Package layout
 
 | Path | Contents |
 | --- | --- |
-| `src/types.ts` | `ImpReactFlowNodeData` (`inputValues` as Imp `InputValues`) |
-| `src/convert.ts` | `impToReactFlow`, `reactFlowToImp` |
-| `src/index.ts` | Public re-exports |
-| `src/*.test.ts` | Round-trip tests |
+| `src/convert.ts` | `impToReactFlow`, `reactFlowToImp` (incl. `Edge.order`) |
+| `src/edit/` | Precise helpers: inbound replace, ids, add node, slots, handle encode, connect |
+| `src/components/ImpGraphView.tsx` | Editable RF canvas (Imp in / Imp out) |
+| `src/components/ImpNode.tsx` | Precise port handles (singleton / variadic / dummy) |
+| `src/styles.css` | Default canvas/node styles (`imp-graph-view/styles.css`) |
+
+## Editing semantics
+
+- **Document:** Imp `Graph` via `onGraphChange`.
+- **Session:** RF selection/viewport live inside `ImpGraphView`; layout merges by node id without remounting.
+- **Precise ports:** singleton connect replaces inbound; variadic expands filled slots + dummy append with `Edge.order`; reorder filled slots rewrites `0..n-1`.
+- **Missing endpoints:** dangling edge node ids render as `(missing)` stub cards (not written into `Graph.nodes` on emit). Required so React Flow does not crash on incomplete documents.
+- **Deferred:** Simple auto-pair mode, retitle/properties, literal inspectors.
 
 ## Quick start
 
 ```ts
 import type { Graph } from "imp-core-types"
-import { impToReactFlow, reactFlowToImp } from "imp-graph-view"
-
-const graph: Graph = { nodes: {}, edges: {} }
-const { nodes, edges } = impToReactFlow(graph)
-const roundTrip = reactFlowToImp(nodes, edges)
+import { ImpGraphView, addImpNode, impToReactFlow } from "imp-graph-view"
+import "imp-graph-view/styles.css"
 ```
 
 ## Run
@@ -40,15 +46,9 @@ bun run typecheck
 bun test
 ```
 
-Full verify (typecheck + tests):
+Full verify: `bun run test`.
 
-```bash
-bun run test
-```
-
-Round-trip tests: empty graph and multi-node graphs preserve node ids, edge ids, and `InputValues`.
-
-Local install expects a sibling [imp-ts](https://github.com/silentorb/imp-ts) checkout at `../imp-ts`.
+Local install expects sibling [imp-ts](https://github.com/silentorb/imp-ts) at `../imp-ts`. In aura-workbench use the **editor-tauri** service.
 
 ## See also
 
