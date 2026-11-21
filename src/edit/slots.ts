@@ -1,4 +1,10 @@
-import type { EdgeId, Graph, PortId } from "imp-core-types"
+import type {
+  EdgeId,
+  Graph,
+  PortId,
+  PrimitiveValue,
+  SignalType,
+} from "imp-core-types"
 import {
   encodeDummyHandle,
   encodeSingletonHandle,
@@ -8,6 +14,10 @@ import {
 export type CatalogInputPort = {
   id: PortId
   variadic?: boolean
+  /** Catalog signal type when the host knows it (literal editors). */
+  signalType?: SignalType
+  /** Catalog default when the host knows it (empty-field display hint). */
+  defaultValue?: PrimitiveValue
 }
 
 export type CatalogOutputPort = {
@@ -16,7 +26,14 @@ export type CatalogOutputPort = {
 
 /** Expanded input slot for Precise-mode handles. */
 export type InputSlot =
-  | { kind: "singleton"; portId: string; handleId: string; label: string }
+  | {
+      kind: "singleton"
+      portId: string
+      handleId: string
+      label: string
+      signalType?: SignalType
+      defaultValue?: PrimitiveValue
+    }
   | {
       kind: "variadic"
       portId: string
@@ -93,6 +110,8 @@ export function expandInputSlots(
         portId: port.id,
         handleId: encodeSingletonHandle(port.id),
         label: port.id,
+        signalType: port.signalType,
+        defaultValue: port.defaultValue,
       })
       continue
     }

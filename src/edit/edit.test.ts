@@ -1,7 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import type { Graph } from "imp-core-types"
 import type { Edge as RfEdge } from "@xyflow/react"
+import { concreteType, typeVar } from "imp-core-types"
 import { addImpNode } from "./addNode"
+import {
+  formatLiteralValue,
+  isLiteralEditableSignalType,
+  parseLiteralText,
+  shouldShowPortLiteralInput,
+} from "./literals"
+import { setNodeInputLiteral } from "./setNodeInputLiteral"
 import { setNodeTitle } from "./setNodeTitle"
 import {
   applyPreciseConnect,
@@ -99,6 +107,86 @@ describe("setNodeTitle", () => {
   test("returns same graph for missing node", () => {
     const graph: Graph = { nodes: {}, edges: {} }
     expect(setNodeTitle(graph, "missing", "x")).toBe(graph)
+  })
+})
+
+describe("setNodeInputLiteral", () => {
+  test("sets clears and stores null", () => {
+    let graph: Graph = {
+      nodes: {
+        a: { id: "a", type: "parameter", inputs: {} },
+      },
+      edges: {},
+    }
+    graph = setNodeInputLiteral(graph, "a", "label", "gain")
+    expect(graph.nodes.a?.inputs.label).toBe("gain")
+    graph = setNodeInputLiteral(graph, "a", "value", null)
+    expect(graph.nodes.a?.inputs.value).toBeNull()
+    expect(Object.prototype.hasOwnProperty.call(graph.nodes.a?.inputs, "value")).toBe(
+      true,
+    )
+    graph = setNodeInputLiteral(graph, "a", "value", undefined)
+    expect(
+      Object.prototype.hasOwnProperty.call(graph.nodes.a?.inputs, "value"),
+    ).toBe(false)
+  })
+
+  test("returns same graph for missing node or no-op", () => {
+    const graph: Graph = {
+      nodes: {
+        a: { id: "a", type: "parameter", inputs: { label: "x" } },
+      },
+      edges: {},
+    }
+    expect(setNodeInputLiteral(graph, "missing", "label", "y")).toBe(graph)
+    expect(setNodeInputLiteral(graph, "a", "label", "x")).toBe(graph)
+    expect(setNodeInputLiteral(graph, "a", "missing", undefined)).toBe(graph)
+  })
+})
+
+describe("literal helpers", () => {
+  test("isLiteralEditableSignalType hides containers", () => {
+    expect(isLiteralEditableSignalType(concreteType("string"))).toBe(true)
+    expect(isLiteralEditableSignalType(concreteType("any"))).toBe(true)
+    expect(isLiteralEditableSignalType(typeVar("T"))).toBe(true)
+    expect(isLiteralEditableSignalType(undefined)).toBe(true)
+    expect(isLiteralEditableSignalType(concreteType("list"))).toBe(false)
+    expect(isLiteralEditableSignalType(concreteType("collection"))).toBe(false)
+  })
+
+  test("shouldShowPortLiteralInput requires unconnected singleton", () => {
+    expect(
+      shouldShowPortLiteralInput(
+        { signalType: concreteType("string") },
+        [],
+        "label",
+      ),
+    ).toBe(true)
+    expect(
+      shouldShowPortLiteralInput(
+        { signalType: concreteType("string") },
+        ["label"],
+        "label",
+      ),
+    ).toBe(false)
+    expect(
+      shouldShowPortLiteralInput(
+        { variadic: true, signalType: concreteType("any") },
+        [],
+        "items",
+      ),
+    ).toBe(false)
+  })
+
+  test("format and parse round-trip common cases", () => {
+    expect(formatLiteralValue(undefined)).toBe("")
+    expect(formatLiteralValue(null)).toBe("")
+    expect(formatLiteralValue(12)).toBe("12")
+    expect(parseLiteralText("3.5", concreteType("number"))).toBe(3.5)
+    expect(parseLiteralText("", concreteType("number"))).toBeUndefined()
+    expect(parseLiteralText("hi", concreteType("string"))).toBe("hi")
+    expect(parseLiteralText("true", concreteType("any"))).toBe(true)
+    expect(parseLiteralText("null", concreteType("any"))).toBeNull()
   })
 })
 

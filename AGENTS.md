@@ -29,8 +29,9 @@ Imp stays free of layout fields; converters inject `{0,0}` and drop positions on
 - **Session:** RF selection/viewport live inside `ImpGraphView` (hosts may observe via `onSelectionChange`); layout merges by node id without remounting.
 - **Precise ports:** singleton connect replaces inbound; variadic expands filled slots + dummy append with `Edge.order`; reorder filled slots rewrites `0..n-1`.
 - **Titles:** converters preserve optional `title` / `typeArgs`; `setNodeTitle` / titled `addImpNode` helpers; node header shows `title ?? id`.
+- **Literals:** `setNodeInputLiteral`; on-node editors for unconnected singleton scalar/`any` ports (host supplies `CatalogInputPort.signalType`); hosts may also edit literals in a Properties pane.
 - **Missing endpoints:** dangling edge node ids render as `(missing)` stub cards (not written into `Graph.nodes` on emit). Required so React Flow does not crash on incomplete documents.
-- **Deferred:** Simple auto-pair mode, literal inspectors.
+- **Deferred:** Simple auto-pair mode.
 
 ## Quick start
 

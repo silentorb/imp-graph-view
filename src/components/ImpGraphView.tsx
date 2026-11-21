@@ -21,7 +21,7 @@ import {
   type NodeTypes,
   type OnSelectionChangeParams,
 } from "@xyflow/react"
-import type { Graph, SignalType } from "imp-core-types"
+import type { Graph, PrimitiveValue, SignalType } from "imp-core-types"
 import { impToReactFlow, reactFlowToImp } from "../convert"
 import {
   applyPreciseConnect,
@@ -30,6 +30,7 @@ import {
   variadicPortKeys,
 } from "../edit/displayEdges"
 import { missingNodeIds } from "../edit/missing"
+import { setNodeInputLiteral } from "../edit/setNodeInputLiteral"
 import { reorderVariadicInputs } from "../edit/slots"
 import {
   expandInputSlots,
@@ -131,6 +132,24 @@ function graphNodeContentKey(graph: Graph): string {
     .join("|")
 }
 
+function connectedInputPortsForNode(graph: Graph, nodeId: string): string[] {
+  const ports: string[] = []
+  const seen = new Set<string>()
+  for (const edge of Object.values(graph.edges)) {
+    if (edge.to.node === nodeId && !seen.has(edge.to.port)) {
+      seen.add(edge.to.port)
+      ports.push(edge.to.port)
+    }
+  }
+  return ports
+}
+
+type FlowNodeCallbacks = {
+  onReorderVariadic: ImpNodeData["onReorderVariadic"]
+  onInputLiteralChange: ImpNodeData["onInputLiteralChange"]
+  readOnly: boolean
+}
+
 function flowNodeFromParts(
   id: string,
   impType: string,
@@ -139,7 +158,7 @@ function flowNodeFromParts(
   edges: Edge[],
   resolvePorts: ResolvePorts,
   layout: ImpGraphViewProps["layout"],
-  onReorderVariadic: ImpNodeData["onReorderVariadic"],
+  callbacks: FlowNodeCallbacks,
   prevSelected: Map<string, boolean>,
   missing: boolean,
   title?: string,
@@ -166,7 +185,12 @@ function flowNodeFromParts(
       title: missing ? undefined : title,
       typeArgs: missing ? undefined : typeArgs,
       missing: missing || undefined,
-      onReorderVariadic,
+      connectedInputPorts: missing
+        ? undefined
+        : connectedInputPortsForNode(graph, id),
+      readOnly: callbacks.readOnly,
+      onReorderVariadic: callbacks.onReorderVariadic,
+      onInputLiteralChange: callbacks.onInputLiteralChange,
     },
   }
 }
@@ -194,7 +218,7 @@ function buildFlowNodes(
   edges: Edge[],
   resolvePorts: ResolvePorts,
   layout: ImpGraphViewProps["layout"],
-  onReorderVariadic: ImpNodeData["onReorderVariadic"],
+  callbacks: FlowNodeCallbacks,
   prevSelected: Map<string, boolean>,
 ): ImpFlowNode[] {
   const converted = impToReactFlow(graph)
@@ -207,7 +231,7 @@ function buildFlowNodes(
       edges,
       resolvePorts,
       layout,
-      onReorderVariadic,
+      callbacks,
       prevSelected,
       false,
       node.data.title,
@@ -226,7 +250,7 @@ function buildFlowNodes(
         edges,
         resolvePorts,
         layout,
-        onReorderVariadic,
+        callbacks,
         prevSelected,
         true,
       ),
@@ -312,6 +336,12 @@ function ImpGraphViewInner({
     [],
   )
 
+  const flowCallbacksRef = useRef<FlowNodeCallbacks>({
+    onReorderVariadic: undefined,
+    onInputLiteralChange: undefined,
+    readOnly,
+  })
+
   const onReorderVariadic = useCallback(
     (nodeId: string, portId: string, orderedEdgeIds: string[]) => {
       if (readOnly) return
@@ -345,7 +375,7 @@ function ImpGraphViewInner({
                 displayEdges,
                 resolvePorts,
                 layout,
-                onReorderVariadic,
+                flowCallbacksRef.current,
                 prevSelected,
               ),
             )
@@ -357,6 +387,59 @@ function ImpGraphViewInner({
     },
     [layout, readOnly, resolvePorts, toConverterNodes],
   )
+
+  const onInputLiteralChange = useCallback(
+    (
+      nodeId: string,
+      portId: string,
+      value: PrimitiveValue | undefined,
+    ) => {
+      if (readOnly) return
+      setNodes((currentNodes) => {
+        setEdges((currentEdges) => {
+          const collapsed = collapseEdgesForImp(currentEdges)
+          const current = reactFlowToImp(
+            toConverterNodes(currentNodes),
+            collapsed,
+          )
+          const imp = setNodeInputLiteral(current, nodeId, portId, value)
+          if (imp === current) {
+            return currentEdges
+          }
+          lastEmittedKey.current = graphTopologyKey(imp)
+          lastContentKey.current = graphNodeContentKey(imp)
+          onGraphChangeRef.current?.(imp)
+
+          const displayEdges = displayEdgesForGraph(imp, resolvePorts)
+          const prevSelected = new Map(
+            currentNodes.map((n) => [n.id, Boolean(n.selected)]),
+          )
+          queueMicrotask(() => {
+            setEdges(displayEdges)
+            setNodes(
+              buildFlowNodes(
+                imp,
+                displayEdges,
+                resolvePorts,
+                layout,
+                flowCallbacksRef.current,
+                prevSelected,
+              ),
+            )
+          })
+          return displayEdges
+        })
+        return currentNodes
+      })
+    },
+    [layout, readOnly, resolvePorts, toConverterNodes],
+  )
+
+  flowCallbacksRef.current = {
+    onReorderVariadic,
+    onInputLiteralChange,
+    readOnly,
+  }
 
   // External graph / layout sync — skip echoes of our own emits.
   useEffect(() => {
@@ -399,7 +482,7 @@ function ImpGraphViewInner({
         displayEdges,
         resolvePorts,
         layout,
-        onReorderVariadic,
+        flowCallbacksRef.current,
         prevSelected,
       )
     })
@@ -411,7 +494,7 @@ function ImpGraphViewInner({
     } else if (isNewLoad) {
       pendingFitRef.current = false
     }
-  }, [fitViewOnLoad, graph, layout, onReorderVariadic, resolvePorts])
+  }, [fitViewOnLoad, graph, layout, onInputLiteralChange, onReorderVariadic, resolvePorts])
 
   // Fit after node state has laid-out positions — never in the same turn as setNodes.
   // If the pane is still 0×0 (hidden tab), keep pending and fit on resize.
@@ -499,7 +582,7 @@ function ImpGraphViewInner({
                   next,
                   resolvePorts,
                   layout,
-                  onReorderVariadic,
+                  flowCallbacksRef.current,
                   prevSelected,
                 ),
               )
@@ -510,7 +593,7 @@ function ImpGraphViewInner({
         return next
       })
     },
-    [emitImp, layout, onReorderVariadic, readOnly, resolvePorts, toConverterNodes],
+    [emitImp, layout, readOnly, resolvePorts, toConverterNodes],
   )
 
   const onConnect = useCallback(
@@ -536,7 +619,7 @@ function ImpGraphViewInner({
                 next,
                 resolvePorts,
                 layout,
-                onReorderVariadic,
+                flowCallbacksRef.current,
                 prevSelected,
               ),
             )
@@ -546,7 +629,7 @@ function ImpGraphViewInner({
         return next
       })
     },
-    [emitImp, layout, onReorderVariadic, readOnly, resolvePorts, toConverterNodes],
+    [emitImp, layout, readOnly, resolvePorts, toConverterNodes],
   )
 
   const empty = Object.keys(graph.nodes).length === 0

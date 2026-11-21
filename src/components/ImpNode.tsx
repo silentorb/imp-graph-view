@@ -1,6 +1,12 @@
 import { memo, useCallback, type DragEvent } from "react"
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
-import type { InputValues, SignalType } from "imp-core-types"
+import type { InputValues, PrimitiveValue, SignalType } from "imp-core-types"
+import {
+  formatLiteralValue,
+  literalEditorKind,
+  parseLiteralText,
+  shouldShowPortLiteralInput,
+} from "../edit/literals"
 import type { InputSlot, OutputSlot } from "../edit/slots"
 
 export type ImpNodeData = {
@@ -14,11 +20,21 @@ export type ImpNodeData = {
   typeArgs?: SignalType[]
   /** Present when this card is a dangling edge endpoint, not in Imp `Graph.nodes`. */
   missing?: boolean
+  /** Port ids that currently have an inbound edge. */
+  connectedInputPorts?: string[]
+  /** Disable literal editors when the canvas is read-only. */
+  readOnly?: boolean
   /** Reorder filled variadic siblings when a slot label is dropped. */
   onReorderVariadic?: (
     nodeId: string,
     portId: string,
     orderedEdgeIds: string[],
+  ) => void
+  /** Commit a local input literal from an on-node control. */
+  onInputLiteralChange?: (
+    nodeId: string,
+    portId: string,
+    value: PrimitiveValue | undefined,
   ) => void
 }
 
@@ -35,6 +51,7 @@ function ImpNodeComponent({ id, data }: NodeProps<ImpFlowNode>) {
   const inputCount = Math.max(data.inputSlots.length, 1)
   const outputCount = Math.max(data.outputSlots.length, 1)
   const rows = Math.max(data.inputSlots.length, data.outputSlots.length, 1)
+  const connectedInputPorts = data.connectedInputPorts ?? []
 
   const onDragStart = useCallback(
     (event: DragEvent, edgeId: string, portId: string) => {
@@ -101,7 +118,7 @@ function ImpNodeComponent({ id, data }: NodeProps<ImpFlowNode>) {
     <div
       className={data.missing ? "imp-gv-node imp-gv-node-missing" : "imp-gv-node"}
       style={{
-        minHeight: 36 + rows * 18,
+        minHeight: 36 + rows * 22,
         height: "100%",
         boxSizing: "border-box",
       }}
@@ -116,30 +133,86 @@ function ImpNodeComponent({ id, data }: NodeProps<ImpFlowNode>) {
       ) : null}
       <div className="imp-gv-ports">
         <div className="imp-gv-inputs">
-          {data.inputSlots.map((slot) => (
-            <div
-              key={`in-label-${slot.handleId}`}
-              className={
-                slot.kind === "variadic"
-                  ? "imp-gv-port-row imp-gv-port-row-variadic"
-                  : "imp-gv-port-row"
-              }
-              draggable={slot.kind === "variadic"}
-              onDragStart={
-                slot.kind === "variadic"
-                  ? (e) => onDragStart(e, slot.edgeId, slot.portId)
-                  : undefined
-              }
-              onDragOver={slot.kind === "variadic" ? onDragOver : undefined}
-              onDrop={
-                slot.kind === "variadic"
-                  ? (e) => onDrop(e, slot.edgeId, slot.portId)
-                  : undefined
-              }
-            >
-              {slot.label}
-            </div>
-          ))}
+          {data.inputSlots.map((slot) => {
+            const showLiteral =
+              !data.missing &&
+              slot.kind === "singleton" &&
+              shouldShowPortLiteralInput(
+                {
+                  variadic: false,
+                  signalType: slot.signalType,
+                },
+                connectedInputPorts,
+                slot.portId,
+              )
+            const kind = showLiteral
+              ? literalEditorKind(slot.signalType)
+              : null
+            const stored = data.inputValues[slot.portId]
+
+            return (
+              <div
+                key={`in-label-${slot.handleId}`}
+                className={
+                  slot.kind === "variadic"
+                    ? "imp-gv-port-row imp-gv-port-row-variadic"
+                    : "imp-gv-port-row"
+                }
+                draggable={slot.kind === "variadic"}
+                onDragStart={
+                  slot.kind === "variadic"
+                    ? (e) => onDragStart(e, slot.edgeId, slot.portId)
+                    : undefined
+                }
+                onDragOver={slot.kind === "variadic" ? onDragOver : undefined}
+                onDrop={
+                  slot.kind === "variadic"
+                    ? (e) => onDrop(e, slot.edgeId, slot.portId)
+                    : undefined
+                }
+              >
+                <span className="imp-gv-port-label">{slot.label}</span>
+                {showLiteral && kind === "boolean" ? (
+                  <input
+                    type="checkbox"
+                    className="imp-gv-port-literal nodrag nopan"
+                    checked={stored === true}
+                    disabled={data.readOnly || !data.onInputLiteralChange}
+                    onChange={(event) => {
+                      data.onInputLiteralChange?.(
+                        id,
+                        slot.portId,
+                        event.currentTarget.checked,
+                      )
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                  />
+                ) : null}
+                {showLiteral && kind !== "boolean" ? (
+                  <input
+                    type={kind === "number" ? "number" : "text"}
+                    className="imp-gv-port-literal nodrag nopan"
+                    value={formatLiteralValue(stored)}
+                    placeholder={
+                      slot.defaultValue !== undefined
+                        ? formatLiteralValue(slot.defaultValue)
+                        : undefined
+                    }
+                    disabled={data.readOnly || !data.onInputLiteralChange}
+                    onChange={(event) => {
+                      const next = parseLiteralText(
+                        event.currentTarget.value,
+                        slot.signalType,
+                      )
+                      data.onInputLiteralChange?.(id, slot.portId, next)
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  />
+                ) : null}
+              </div>
+            )
+          })}
         </div>
         <div className="imp-gv-outputs">
           {data.outputSlots.map((slot) => (

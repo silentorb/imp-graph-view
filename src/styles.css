@@ -78,10 +78,45 @@
 }
 
 .imp-gv-port-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   line-height: 1.2;
   color: #aaa;
   padding-inline: 4px;
   user-select: none;
+  min-height: 18px;
+}
+
+.imp-gv-port-label {
+  flex: 0 0 auto;
+}
+
+.imp-gv-port-literal {
+  flex: 1 1 auto;
+  min-width: 48px;
+  max-width: 96px;
+  height: 18px;
+  margin: 0;
+  padding: 0 4px;
+  border: 1px solid #555;
+  border-radius: 3px;
+  background: #111;
+  color: #eee;
+  font-size: 11px;
+  box-sizing: border-box;
+}
+
+.imp-gv-port-literal[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 14px;
+  min-width: 14px;
+  max-width: 14px;
+  height: 14px;
+}
+
+.imp-gv-port-literal:disabled {
+  opacity: 0.6;
 }
 
 .imp-gv-port-row-variadic {

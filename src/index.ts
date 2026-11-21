@@ -14,6 +14,15 @@ export {
 export { uniqueNodeId, uniqueEdgeId, uniqueNodeTitle } from "./edit/ids"
 export { addImpNode } from "./edit/addNode"
 export { setNodeTitle } from "./edit/setNodeTitle"
+export { setNodeInputLiteral } from "./edit/setNodeInputLiteral"
+export {
+  formatLiteralValue,
+  parseLiteralText,
+  shouldShowPortLiteralInput,
+  isLiteralEditableSignalType,
+  literalEditorKind,
+  type LiteralEditorKind,
+} from "./edit/literals"
 export {
   encodeSingletonHandle,
   encodeVariadicHandle,
