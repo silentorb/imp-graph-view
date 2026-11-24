@@ -8,8 +8,8 @@ Peers: `react`, `react-dom`, `@xyflow/react` (supplied by the host; do not nest 
 
 ## Consumers
 
-- **Imp Lab Tauri** — primary consumer today (thin host: ELK, registry, Add palette, Save).
-- **[Tome](https://github.com/silentorb/tome)** — via thin embed `tome-imp-view` (theme/palette/registry → `resolvePorts`). Do **not** add a package dependency on Tome.
+- **Imp Lab Tauri** — primary consumer today (thin host: ELK, registry → add-node types, Save; also reuses `SearchModal` for record quick-open).
+- **[Tome](https://github.com/silentorb/tome)** — via thin embed `tome-imp-view` (theme, registry → `resolvePorts` and add-node types). Do **not** add a package dependency on Tome.
 
 Imp stays free of layout fields; converters inject `{0,0}` and drop positions on the way back. Hosts supply a `layout` map to `ImpGraphView`.
 
@@ -21,6 +21,7 @@ Imp stays free of layout fields; converters inject `{0,0}` and drop positions on
 | `src/edit/` | Precise helpers: inbound replace, ids, add/retitle node, slots, handle encode, connect; `GraphEdit` + `applyGraphEdits` / `diffGraphs`; unresolved stubs |
 | `src/components/ImpGraphView.tsx` | Editable RF canvas (graph source in / edit intents out); `onSelectionChange` for host chrome |
 | `src/components/ImpNode.tsx` | Precise port handles; header shows `title ?? id` with type subtitle |
+| `src/search/` | `SearchModal` (generic quick-pick: keyboard nav, async debounce, portal; themed by `--imp-gv-search-*`) and `rankByQuery` |
 | `src/styles.css` | Default canvas/node styles (`imp-graph-view/styles.css`) |
 
 ## Editing semantics
@@ -33,6 +34,7 @@ Imp stays free of layout fields; converters inject `{0,0}` and drop positions on
 - **Titles:** converters preserve optional `title` / `typeArgs`; `setNodeTitle` / titled `addImpNode` helpers; node header shows `title ?? id`.
 - **Literals:** `setNodeInputLiteral`; on-node editors for unconnected singleton scalar/`any` ports (host supplies `CatalogInputPort.signalType`); hosts may also edit literals in a Properties pane.
 - **Unresolved endpoints:** edge endpoints no provider resolves render as `(unresolved)` stub cards (never emitted as nodes). Required so React Flow does not crash on incomplete graphs. Hosts lay them out with `graphWithUnresolvedStubs(source)`.
+- **Add node:** with `addableNodeTypes` (and `onEdit`, not `readOnly`), Shift+A over the canvas, double-click on empty canvas, the + control, or `ref.openAddNode()` opens a `SearchModal` of node types. The pick emits an `addNode` edit, an `onLayoutChange` placing it under the pointer (or centered), and selects it once echoed. Hosts without layout persistence still see it where it was placed until their layout covers it.
 - **Deferred:** Simple auto-pair mode.
 
 ## Quick start

@@ -1,13 +1,17 @@
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type Ref,
 } from "react"
 import {
   Background,
+  ControlButton,
   Controls,
   ReactFlow,
   ReactFlowProvider,
@@ -50,6 +54,9 @@ import {
   nodesMatchGraph,
   nodesReflectLayout,
 } from "../layoutReady"
+import { addImpNode } from "../edit/addNode"
+import { rankByQuery } from "../search/rank"
+import { SearchModal } from "../search/SearchModal"
 import { ImpNode, type ImpFlowNode, type ImpNodeData } from "./ImpNode"
 
 export type ResolvePorts = (
@@ -73,7 +80,23 @@ export type GraphSelection = {
   edgeIds: string[]
 }
 
+/** A node type the add-node picker offers. `NodeDefinition` from imp-core-types fits. */
+export type AddableNodeType = {
+  id: string
+  name?: string
+}
+
+/** Imperative controls for host commands and menus. */
+export type ImpGraphViewHandle = {
+  /**
+   * Opens the add-node picker. The node lands under the pointer when it is over the canvas,
+   * else at the canvas center. No-op when adding is unavailable.
+   */
+  openAddNode: () => void
+}
+
 export type ImpGraphViewProps = {
+  ref?: Ref<ImpGraphViewHandle>
   /**
    * Edges plus a node provider. Every node the provider resolves renders as an ordinary card,
    * wherever it is stored; only unresolved endpoints render as stubs. Wrap a single document
@@ -112,6 +135,12 @@ export type ImpGraphViewProps = {
    * outside Imp (e.g. page-block fences) should store this map.
    */
   onLayoutChange?: (layout: Record<string, LayoutBox>) => void
+  /**
+   * Node types offered by the add-node picker (Shift+A over the canvas, double-click empty
+   * canvas, the + control, or `ref.openAddNode()`). Adding is off when empty, `readOnly`, or
+   * without `onEdit`. A new node emits an `addNode` edit plus an `onLayoutChange` placing it.
+   */
+  addableNodeTypes?: readonly AddableNodeType[]
 }
 
 const FIT_PADDING = 0.2
@@ -125,13 +154,38 @@ function layoutLookup(
   return (layout as Record<string, LayoutBox>)[id]
 }
 
-function scheduleFitView(fitView: (opts: { padding: number }) => unknown) {
+function scheduleFitView(
+  fitView: (opts: { padding: number; maxZoom?: number }) => unknown,
+  maxZoom?: number,
+) {
   // Double rAF: wait until React Flow has committed the latest node positions.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      void fitView({ padding: FIT_PADDING })
+      void fitView(
+        maxZoom === undefined ? { padding: FIT_PADDING } : { padding: FIT_PADDING, maxZoom },
+      )
     })
   })
+}
+
+/** Topology key of a graph with no nodes or edges. */
+const EMPTY_TOPOLOGY_KEY = "#"
+
+function isTextEditingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  )
+}
+
+/** Double-clicks on empty canvas only — not on nodes, edges, or the controls. */
+function isPaneTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  if (target.closest(".react-flow__node, .react-flow__edge, .react-flow__controls")) return false
+  return target.closest(".react-flow__pane") !== null
 }
 
 function graphTopologyKey(graph: Graph): string {
@@ -316,8 +370,10 @@ function ImpGraphViewInner({
   fitViewKey,
   onSelectionChange,
   onLayoutChange,
-}: ImpGraphViewProps) {
-  const { fitView } = useReactFlow()
+  addableNodeTypes,
+  handleRef,
+}: Omit<ImpGraphViewProps, "ref"> & { handleRef?: Ref<ImpGraphViewHandle> }) {
+  const { fitView, screenToFlowPosition } = useReactFlow()
   const graph = useSourceSnapshot(source)
   const onEditRef = useRef(onEdit)
   onEditRef.current = onEdit
@@ -338,10 +394,23 @@ function ImpGraphViewInner({
   const loadedKey = useRef<string | null>(null)
   const loadedFitKey = useRef<string | null>(null)
   const pendingFitRef = useRef(false)
+  /** Zoom cap for the pending fit (an empty graph's first node should not fill the pane). */
+  const pendingFitMaxZoomRef = useRef<number | undefined>(undefined)
   const rootRef = useRef<HTMLDivElement>(null)
 
   const [nodes, setNodes] = useState<ImpFlowNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
+  const nodesRef = useRef(nodes)
+  nodesRef.current = nodes
+
+  /** Positions of nodes the picker placed, until the host layout covers them. */
+  const placedRef = useRef(new Map<string, LayoutBox>())
+  /** Node to select once the host echoes it back. */
+  const pendingSelectRef = useRef<string | null>(null)
+  const pointerRef = useRef<{ x: number; y: number } | null>(null)
+  const hoverRef = useRef(false)
+  const [addOpen, setAddOpen] = useState(false)
+  const addAtRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
 
   const toConverterNodes = useCallback((flowNodes: ImpFlowNode[]) => {
     // Unresolved stub cards are display-only — never emit them as nodes.
@@ -523,6 +592,7 @@ function ImpGraphViewInner({
     }
 
     const topologyChanged = loadedKey.current !== topoKey
+    const wasEmpty = loadedKey.current === EMPTY_TOPOLOGY_KEY
     loadedKey.current = topoKey
     baseGraphRef.current = graph
     lastEmittedKey.current = topoKey
@@ -537,10 +607,19 @@ function ImpGraphViewInner({
     }
 
     const displayEdges = displayEdgesForGraph(graph, resolvePorts)
+    const selectId =
+      pendingSelectRef.current && pendingSelectRef.current in graph.nodes
+        ? pendingSelectRef.current
+        : null
+    if (selectId) pendingSelectRef.current = null
+    for (const id of [...placedRef.current.keys()]) {
+      if (!(id in graph.nodes) || layoutLookup(layout, id)) placedRef.current.delete(id)
+    }
+    const placed = new Map(placedRef.current)
     setNodes((current) => {
-      const prevSelected = new Map(
-        current.map((n) => [n.id, Boolean(n.selected)]),
-      )
+      const prevSelected = selectId
+        ? new Map([[selectId, true]])
+        : new Map(current.map((n) => [n.id, Boolean(n.selected)]))
       return buildFlowNodes(
         graph,
         displayEdges,
@@ -548,13 +627,22 @@ function ImpGraphViewInner({
         layout,
         flowCallbacksRef.current,
         prevSelected,
-      )
+      ).map((n) => {
+        const box = placed.get(n.id)
+        return box ? { ...n, position: { x: box.x, y: box.y } } : n
+      })
     })
     setEdges(displayEdges)
 
-    if (fitViewOnLoad && fitKeyChanged && Object.keys(graph.nodes).length > 0) {
+    const hasNodes = Object.keys(graph.nodes).length > 0
+    if (fitViewOnLoad && fitKeyChanged && hasNodes) {
       // Fit only after a later render where `nodes` reflect ready layout (see below).
       pendingFitRef.current = true
+      pendingFitMaxZoomRef.current = undefined
+    } else if (fitViewOnLoad && wasEmpty && hasNodes) {
+      // The canvas mounts fresh when an empty graph gets its first node; bring it into view.
+      pendingFitRef.current = true
+      pendingFitMaxZoomRef.current = 1
     } else if (fitKeyChanged) {
       pendingFitRef.current = false
     }
@@ -585,7 +673,7 @@ function ImpGraphViewInner({
       if (!pendingFitRef.current) return
       if (!paneReady()) return
       pendingFitRef.current = false
-      scheduleFitView(fitView)
+      scheduleFitView(fitView, pendingFitMaxZoomRef.current)
     }
 
     runFit()
@@ -721,6 +809,117 @@ function ImpGraphViewInner({
   const empty =
     Object.keys(graph.nodes).length === 0 && Object.keys(graph.edges).length === 0
   const editable = !readOnly
+  const canAdd = editable && onEdit !== undefined && (addableNodeTypes?.length ?? 0) > 0
+
+  /** Opens the picker for a node at `at` (client coords), else under the pointer, else centered. */
+  const openAddNode = useCallback(
+    (at?: { x: number; y: number } | "center") => {
+      if (!canAdd) return
+      const root = rootRef.current
+      let client: { x: number; y: number } | null =
+        at === "center" || at === undefined ? null : at
+      if (!client && at !== "center" && root && pointerRef.current) {
+        const rect = root.getBoundingClientRect()
+        const p = pointerRef.current
+        if (p.x >= rect.left && p.x <= rect.right && p.y >= rect.top && p.y <= rect.bottom) {
+          client = p
+        }
+      }
+      if (!client && root) {
+        const rect = root.getBoundingClientRect()
+        client = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+      }
+      // An empty graph has no mounted canvas to project onto; its first node goes at the origin.
+      addAtRef.current = empty || !client ? { x: 0, y: 0 } : screenToFlowPosition(client)
+      setAddOpen(true)
+    },
+    [canAdd, empty, screenToFlowPosition],
+  )
+
+  useImperativeHandle(handleRef, () => ({ openAddNode: () => openAddNode() }), [openAddNode])
+
+  const addNode = useCallback(
+    (typeId: string) => {
+      const before = baseGraphRef.current
+      const next = addImpNode(before, typeId)
+      const id = Object.keys(next.nodes).find((nodeId) => !(nodeId in before.nodes))
+      if (!id) return
+      const box: LayoutBox = { ...addAtRef.current }
+      placedRef.current.set(id, box)
+      pendingSelectRef.current = id
+      emitGraph(next)
+      if (onLayoutChangeRef.current) {
+        const nextLayout: Record<string, LayoutBox> = {}
+        for (const node of nodesRef.current) {
+          if (node.data?.unresolved) continue
+          nextLayout[node.id] = { x: node.position.x, y: node.position.y }
+        }
+        nextLayout[id] = box
+        onLayoutChangeRef.current(nextLayout)
+      }
+    },
+    [emitGraph],
+  )
+
+  // Shift+A while the pointer is over this canvas or focus is inside it.
+  useEffect(() => {
+    if (!canAdd) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat) return
+      if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
+      if (event.key.toLowerCase() !== "a") return
+      if (isTextEditingTarget(event.target)) return
+      const root = rootRef.current
+      if (!root) return
+      if (!hoverRef.current && !root.contains(document.activeElement)) return
+      event.preventDefault()
+      openAddNode()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [canAdd, openAddNode])
+
+  const searchNodeTypes = useCallback(
+    (query: string) =>
+      rankByQuery(addableNodeTypes ?? [], query, (t) => [t.name || t.id, t.id]),
+    [addableNodeTypes],
+  )
+
+  const rootProps = {
+    ref: rootRef,
+    className: className ? `imp-gv-root ${className}` : "imp-gv-root",
+    style,
+    onPointerMove: (event: { clientX: number; clientY: number }) => {
+      pointerRef.current = { x: event.clientX, y: event.clientY }
+    },
+    onPointerEnter: () => {
+      hoverRef.current = true
+    },
+    onPointerLeave: () => {
+      hoverRef.current = false
+    },
+  }
+
+  const addNodePicker = (
+    <SearchModal
+      open={addOpen}
+      onClose={() => setAddOpen(false)}
+      search={searchNodeTypes}
+      getKey={(t) => t.id}
+      ariaLabel="Add node"
+      placeholder="Add node…"
+      emptyText={() => "No matching node types"}
+      renderItem={(t) => (
+        <>
+          <span className="imp-gv-search-item-label">{t.name || t.id}</span>
+          {t.name && t.name !== t.id ? (
+            <span className="imp-gv-search-item-detail">{t.id}</span>
+          ) : null}
+        </>
+      )}
+      onActivate={(t) => addNode(t.id)}
+    />
+  )
 
   useEffect(() => {
     if (empty) {
@@ -730,21 +929,32 @@ function ImpGraphViewInner({
 
   if (empty) {
     return (
-      <div
-        ref={rootRef}
-        className={className ? `imp-gv-root ${className}` : "imp-gv-root"}
-        style={style}
-      >
-        <div className="imp-gv-empty">Empty Imp graph</div>
+      <div {...rootProps}>
+        <div
+          className="imp-gv-empty"
+          onDoubleClick={canAdd ? () => openAddNode() : undefined}
+        >
+          {canAdd
+            ? "Empty Imp graph — double-click or press Shift+A to add a node"
+            : "Empty Imp graph"}
+        </div>
+        {addNodePicker}
       </div>
     )
   }
 
   return (
     <div
-      ref={rootRef}
-      className={className ? `imp-gv-root ${className}` : "imp-gv-root"}
-      style={style}
+      {...rootProps}
+      onDoubleClick={
+        canAdd
+          ? (event: ReactMouseEvent) => {
+              if (isPaneTarget(event.target)) {
+                openAddNode({ x: event.clientX, y: event.clientY })
+              }
+            }
+          : undefined
+      }
     >
       <ReactFlow
         className="imp-gv-flow"
@@ -764,21 +974,33 @@ function ImpGraphViewInner({
         nodesFocusable={editable}
         panOnDrag
         zoomOnScroll
+        zoomOnDoubleClick={!canAdd}
         proOptions={{ hideAttribution: true }}
         fitViewOptions={{ padding: FIT_PADDING }}
         minZoom={0.1}
       >
         <Background gap={16} size={1} />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false}>
+          {canAdd ? (
+            <ControlButton
+              onClick={() => openAddNode("center")}
+              title="Add node (Shift+A)"
+              aria-label="Add node"
+            >
+              +
+            </ControlButton>
+          ) : null}
+        </Controls>
       </ReactFlow>
+      {addNodePicker}
     </div>
   )
 }
 
-export function ImpGraphView(props: ImpGraphViewProps) {
+export function ImpGraphView({ ref, ...props }: ImpGraphViewProps) {
   return (
     <ReactFlowProvider>
-      <ImpGraphViewInner {...props} />
+      <ImpGraphViewInner {...props} handleRef={ref} />
     </ReactFlowProvider>
   )
 }

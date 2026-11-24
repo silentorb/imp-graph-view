@@ -69,7 +69,15 @@ export {
   type GraphSelection,
   type ResolvePorts,
   type LayoutBox,
+  type AddableNodeType,
+  type ImpGraphViewHandle,
 } from "./components/ImpGraphView"
+export {
+  SearchModal,
+  type SearchModalProps,
+  type SearchActivateOptions,
+} from "./search/SearchModal"
+export { rankByQuery } from "./search/rank"
 export {
   layoutReadyForGraph,
   nodesMatchGraph,
