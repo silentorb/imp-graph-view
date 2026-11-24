@@ -18,8 +18,8 @@ export type ImpNodeData = {
   title?: string
   /** Preserved Imp type arguments for round-trip. */
   typeArgs?: SignalType[]
-  /** Present when this card is a dangling edge endpoint, not in Imp `Graph.nodes`. */
-  missing?: boolean
+  /** Present when no node provider supplies this edge endpoint (stub card, never emitted). */
+  unresolved?: boolean
   /** Port ids that currently have an inbound edge. */
   connectedInputPorts?: string[]
   /** Disable literal editors when the canvas is read-only. */
@@ -105,28 +105,28 @@ function ImpNodeComponent({ id, data }: NodeProps<ImpFlowNode>) {
     [data, id],
   )
 
-  const typeLabel = data.missing
-    ? "(missing)"
+  const typeLabel = data.unresolved
+    ? "(unresolved)"
     : data.impType || "(unknown)"
-  const headerLabel = data.missing
-    ? "(missing)"
+  const headerLabel = data.unresolved
+    ? "(unresolved)"
     : data.title?.trim()
       ? data.title
       : id
 
   return (
     <div
-      className={data.missing ? "imp-gv-node imp-gv-node-missing" : "imp-gv-node"}
+      className={data.unresolved ? "imp-gv-node imp-gv-node-unresolved" : "imp-gv-node"}
       style={{
         minHeight: 36 + rows * 22,
         height: "100%",
         boxSizing: "border-box",
       }}
     >
-      <div className="imp-gv-node-header" title={headerLabel}>
+      <div className="imp-gv-node-header" title={data.unresolved ? id : headerLabel}>
         {headerLabel}
       </div>
-      {!data.missing ? (
+      {!data.unresolved ? (
         <div className="imp-gv-node-type" title={typeLabel}>
           {typeLabel}
         </div>
@@ -135,7 +135,7 @@ function ImpNodeComponent({ id, data }: NodeProps<ImpFlowNode>) {
         <div className="imp-gv-inputs">
           {data.inputSlots.map((slot) => {
             const showLiteral =
-              !data.missing &&
+              !data.unresolved &&
               slot.kind === "singleton" &&
               shouldShowPortLiteralInput(
                 {

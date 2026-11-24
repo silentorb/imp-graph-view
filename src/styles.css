@@ -32,7 +32,7 @@
   box-sizing: border-box;
 }
 
-.imp-gv-node-missing {
+.imp-gv-node-unresolved {
   border-color: #b91c1c;
   background: #450a0a;
   color: #fecaca;

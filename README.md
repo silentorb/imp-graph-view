@@ -3,7 +3,7 @@
 Imp ↔ [React Flow](https://reactflow.dev/) converters and an editable **Precise** Imp graph canvas for Lab (and future Tome).
 
 - Converters stash Imp `InputValues` on `node.data.inputValues` and round-trip optional `Edge.order`.
-- `ImpGraphView` takes an Imp `Graph`, host `resolvePorts` + optional layout positions, and emits Imp on edit.
+- `ImpGraphView` takes a `GraphSource` (`graphSource(graph)` for one document), host `resolvePorts` + optional layout positions, and emits `GraphEdit` intents on edit (`applyGraphEdits` for one document).
 - Layout engines stay in the host (Lab uses ELK).
 
 ```ts

@@ -51,9 +51,16 @@ export {
 } from "./edit/displayEdges"
 export { inferPortsFromEdges } from "./edit/inferPorts"
 export {
-  missingNodeIds,
-  graphWithMissingStubs,
-} from "./edit/missing"
+  unresolvedNodeIds,
+  graphWithUnresolvedStubs,
+  UNRESOLVED_NODE_TYPE,
+} from "./edit/unresolved"
+export {
+  applyGraphEdits,
+  diffGraphs,
+  type GraphEdit,
+  type NodePatch,
+} from "./edit/graphEdits"
 
 export { ImpNode, type ImpNodeData, type ImpFlowNode } from "./components/ImpNode"
 export {

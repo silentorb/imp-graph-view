@@ -18,20 +18,21 @@ Imp stays free of layout fields; converters inject `{0,0}` and drop positions on
 | Path | Contents |
 | --- | --- |
 | `src/convert.ts` | `impToReactFlow`, `reactFlowToImp` (incl. `Edge.order`) |
-| `src/edit/` | Precise helpers: inbound replace, ids, add/retitle node, slots, handle encode, connect |
-| `src/components/ImpGraphView.tsx` | Editable RF canvas (Imp in / Imp out); `onSelectionChange` for host chrome |
+| `src/edit/` | Precise helpers: inbound replace, ids, add/retitle node, slots, handle encode, connect; `GraphEdit` + `applyGraphEdits` / `diffGraphs`; unresolved stubs |
+| `src/components/ImpGraphView.tsx` | Editable RF canvas (graph source in / edit intents out); `onSelectionChange` for host chrome |
 | `src/components/ImpNode.tsx` | Precise port handles; header shows `title ?? id` with type subtitle |
 | `src/styles.css` | Default canvas/node styles (`imp-graph-view/styles.css`) |
 
 ## Editing semantics
 
-- **Document:** Imp `Graph` via `onGraphChange`. Undo/redo belongs in the host (document snapshots), not in this package.
+- **Input:** a `GraphSource` (`source`): edges plus a node provider. The view does not know or care whether a node is local or remote; every node the provider resolves is an ordinary card. A single document is `graphSource(graph)`.
+- **Output:** edit intents via `onEdit(GraphEdit[])` (`addNode`, `updateNode`, `removeNode`, `putEdge`, `removeEdge`), diffed from the view's last snapshot. Hosts route each edit to the source that owns it; `applyGraphEdits(graph, edits)` covers one document. Undo/redo belongs in the host (document snapshots), not in this package.
 - **Session:** RF selection/viewport live inside `ImpGraphView` (hosts may observe via `onSelectionChange`); layout merges by node id without remounting.
 - **fitViewKey:** optional host load identity; when set, `fitViewOnLoad` runs only when that key changes (open / new tab), not on every topology edit or undo.
 - **Precise ports:** singleton connect replaces inbound; variadic expands filled slots + dummy append with `Edge.order`; reorder filled slots rewrites `0..n-1`.
 - **Titles:** converters preserve optional `title` / `typeArgs`; `setNodeTitle` / titled `addImpNode` helpers; node header shows `title ?? id`.
 - **Literals:** `setNodeInputLiteral`; on-node editors for unconnected singleton scalar/`any` ports (host supplies `CatalogInputPort.signalType`); hosts may also edit literals in a Properties pane.
-- **Missing endpoints:** dangling edge node ids render as `(missing)` stub cards (not written into `Graph.nodes` on emit). Required so React Flow does not crash on incomplete documents.
+- **Unresolved endpoints:** edge endpoints no provider resolves render as `(unresolved)` stub cards (never emitted as nodes). Required so React Flow does not crash on incomplete graphs. Hosts lay them out with `graphWithUnresolvedStubs(source)`.
 - **Deferred:** Simple auto-pair mode.
 
 ## Quick start

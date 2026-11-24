@@ -21,7 +21,13 @@ import {
   type NodeTypes,
   type OnSelectionChangeParams,
 } from "@xyflow/react"
-import type { Graph, PrimitiveValue, SignalType } from "imp-core-types"
+import {
+  materializeGraph,
+  type Graph,
+  type GraphSource,
+  type PrimitiveValue,
+  type SignalType,
+} from "imp-core-types"
 import { impToReactFlow, reactFlowToImp } from "../convert"
 import {
   applyPreciseConnect,
@@ -29,7 +35,8 @@ import {
   expandEdgesForDisplay,
   variadicPortKeys,
 } from "../edit/displayEdges"
-import { missingNodeIds } from "../edit/missing"
+import { diffGraphs, type GraphEdit } from "../edit/graphEdits"
+import { UNRESOLVED_NODE_TYPE, unresolvedInGraph } from "../edit/unresolved"
 import { setNodeInputLiteral } from "../edit/setNodeInputLiteral"
 import { reorderVariadicInputs } from "../edit/slots"
 import {
@@ -67,8 +74,17 @@ export type GraphSelection = {
 }
 
 export type ImpGraphViewProps = {
-  graph: Graph
-  onGraphChange?: (graph: Graph) => void
+  /**
+   * Edges plus a node provider. Every node the provider resolves renders as an ordinary card,
+   * wherever it is stored; only unresolved endpoints render as stubs. Wrap a single document
+   * with `graphSource(graph)`.
+   */
+  source: GraphSource
+  /**
+   * Edit intents for the host to route to whichever source owns each node or edge
+   * (`applyGraphEdits` for a single document).
+   */
+  onEdit?: (edits: GraphEdit[]) => void
   resolvePorts: ResolvePorts
   layout?: ReadonlyMap<string, LayoutBox> | Record<string, LayoutBox>
   readOnly?: boolean
@@ -172,7 +188,7 @@ function flowNodeFromParts(
   layout: ImpGraphViewProps["layout"],
   callbacks: FlowNodeCallbacks,
   prevSelected: Map<string, boolean>,
-  missing: boolean,
+  unresolved: boolean,
   title?: string,
   typeArgs?: SignalType[],
 ): ImpFlowNode {
@@ -190,14 +206,14 @@ function flowNodeFromParts(
     style: Object.keys(style).length ? style : undefined,
     selected: prevSelected.get(id) ?? false,
     data: {
-      impType: missing ? "(missing)" : impType,
+      impType: unresolved ? UNRESOLVED_NODE_TYPE : impType,
       inputValues,
       inputSlots,
       outputSlots,
-      title: missing ? undefined : title,
-      typeArgs: missing ? undefined : typeArgs,
-      missing: missing || undefined,
-      connectedInputPorts: missing
+      title: unresolved ? undefined : title,
+      typeArgs: unresolved ? undefined : typeArgs,
+      unresolved: unresolved || undefined,
+      connectedInputPorts: unresolved
         ? undefined
         : connectedInputPortsForNode(graph, id),
       readOnly: callbacks.readOnly,
@@ -217,9 +233,9 @@ function displayEdgesForGraph(
       nodeId: node.id,
       inputs: resolvePorts(node.type, node.id, canonical).inputs,
     })),
-    ...missingNodeIds(graph).map((id) => ({
+    ...unresolvedInGraph(graph).map((id) => ({
       nodeId: id,
-      inputs: resolvePorts("(missing)", id, canonical).inputs,
+      inputs: resolvePorts(UNRESOLVED_NODE_TYPE, id, canonical).inputs,
     })),
   ]
   return expandEdgesForDisplay(canonical, variadicPortKeys(nodePorts))
@@ -251,12 +267,12 @@ function buildFlowNodes(
     ),
   )
 
-  // Dangling edge endpoints must exist as RF nodes or React Flow blank-crashes.
-  for (const id of missingNodeIds(graph)) {
+  // Unresolved edge endpoints must exist as RF nodes or React Flow blank-crashes.
+  for (const id of unresolvedInGraph(graph)) {
     nodes.push(
       flowNodeFromParts(
         id,
-        "(missing)",
+        UNRESOLVED_NODE_TYPE,
         {},
         graph,
         edges,
@@ -271,9 +287,23 @@ function buildFlowNodes(
   return nodes
 }
 
+/**
+ * Snapshot of the source as a serialized graph, stable across renders while its content is
+ * unchanged (hosts may build a new `source` object every render).
+ */
+function useSourceSnapshot(source: GraphSource): Graph {
+  const materialized = materializeGraph(source)
+  const key = `${graphTopologyKey(materialized)}#${graphNodeContentKey(materialized)}`
+  const ref = useRef<{ key: string; graph: Graph } | null>(null)
+  if (ref.current?.key !== key) {
+    ref.current = { key, graph: materialized }
+  }
+  return ref.current.graph
+}
+
 function ImpGraphViewInner({
-  graph,
-  onGraphChange,
+  source,
+  onEdit,
   resolvePorts,
   layout,
   readOnly = false,
@@ -288,8 +318,16 @@ function ImpGraphViewInner({
   onLayoutChange,
 }: ImpGraphViewProps) {
   const { fitView } = useReactFlow()
-  const onGraphChangeRef = useRef(onGraphChange)
-  onGraphChangeRef.current = onGraphChange
+  const graph = useSourceSnapshot(source)
+  const onEditRef = useRef(onEdit)
+  onEditRef.current = onEdit
+  /** Last graph the view synced from the source or emitted; edits are diffs against it. */
+  const baseGraphRef = useRef<Graph>(graph)
+  const emitGraph = useCallback((imp: Graph) => {
+    const edits = diffGraphs(baseGraphRef.current, imp)
+    baseGraphRef.current = imp
+    if (edits.length > 0) onEditRef.current?.(edits)
+  }, [])
   const onSelectionChangeRef = useRef(onSelectionChange)
   onSelectionChangeRef.current = onSelectionChange
   const onLayoutChangeRef = useRef(onLayoutChange)
@@ -306,9 +344,9 @@ function ImpGraphViewInner({
   const [edges, setEdges] = useState<Edge[]>([])
 
   const toConverterNodes = useCallback((flowNodes: ImpFlowNode[]) => {
-    // Missing stub cards are display-only — never write them into Imp Graph.nodes.
+    // Unresolved stub cards are display-only — never emit them as nodes.
     return flowNodes
-      .filter((n) => !n.data.missing)
+      .filter((n) => !n.data.unresolved)
       .map((n) => {
         const data: {
           inputValues: ImpNodeData["inputValues"]
@@ -338,9 +376,9 @@ function ImpGraphViewInner({
       const imp = reactFlowToImp(toConverterNodes(nextNodes), collapsed)
       lastEmittedKey.current = graphTopologyKey(imp)
       lastContentKey.current = graphNodeContentKey(imp)
-      onGraphChangeRef.current?.(imp)
+      emitGraph(imp)
     },
-    [toConverterNodes],
+    [emitGraph, toConverterNodes],
   )
 
   const handleSelectionChange = useCallback(
@@ -378,7 +416,7 @@ function ImpGraphViewInner({
           }
           lastEmittedKey.current = graphTopologyKey(imp)
           lastContentKey.current = graphNodeContentKey(imp)
-          onGraphChangeRef.current?.(imp)
+          emitGraph(imp)
 
           const displayEdges = displayEdgesForGraph(imp, resolvePorts)
           const prevSelected = new Map(
@@ -402,7 +440,7 @@ function ImpGraphViewInner({
         return currentNodes
       })
     },
-    [layout, readOnly, resolvePorts, toConverterNodes],
+    [emitGraph, layout, readOnly, resolvePorts, toConverterNodes],
   )
 
   const onInputLiteralChange = useCallback(
@@ -425,7 +463,7 @@ function ImpGraphViewInner({
           }
           lastEmittedKey.current = graphTopologyKey(imp)
           lastContentKey.current = graphNodeContentKey(imp)
-          onGraphChangeRef.current?.(imp)
+          emitGraph(imp)
 
           const displayEdges = displayEdgesForGraph(imp, resolvePorts)
           const prevSelected = new Map(
@@ -449,7 +487,7 @@ function ImpGraphViewInner({
         return currentNodes
       })
     },
-    [layout, readOnly, resolvePorts, toConverterNodes],
+    [emitGraph, layout, readOnly, resolvePorts, toConverterNodes],
   )
 
   flowCallbacksRef.current = {
@@ -486,6 +524,7 @@ function ImpGraphViewInner({
 
     const topologyChanged = loadedKey.current !== topoKey
     loadedKey.current = topoKey
+    baseGraphRef.current = graph
     lastEmittedKey.current = topoKey
     lastContentKey.current = contentKey
 
@@ -591,7 +630,7 @@ function ImpGraphViewInner({
         if (dragEnded && onLayoutChangeRef.current) {
           const nextLayout: Record<string, LayoutBox> = {}
           for (const node of next) {
-            if (node.data?.missing) continue
+            if (node.data?.unresolved) continue
             nextLayout[node.id] = {
               x: node.position.x,
               y: node.position.y,
@@ -679,7 +718,8 @@ function ImpGraphViewInner({
     [emitImp, layout, readOnly, resolvePorts, toConverterNodes],
   )
 
-  const empty = Object.keys(graph.nodes).length === 0
+  const empty =
+    Object.keys(graph.nodes).length === 0 && Object.keys(graph.edges).length === 0
   const editable = !readOnly
 
   useEffect(() => {

@@ -25,7 +25,9 @@ import {
 import { uniqueNodeId, uniqueNodeTitle } from "./ids"
 import { dedupeInboundReactFlowEdges, withoutInboundToPort } from "./inbound"
 import { inferPortsFromEdges } from "./inferPorts"
-import { missingNodeIds } from "./missing"
+import { graphSource, layeredNodes, nodeMapProvider } from "imp-core-types"
+import { applyGraphEdits, diffGraphs } from "./graphEdits"
+import { graphWithUnresolvedStubs, unresolvedNodeIds } from "./unresolved"
 import {
   expandInputSlots,
   nextVariadicOrder,
@@ -249,8 +251,8 @@ describe("slots and order", () => {
   })
 })
 
-describe("missing endpoints", () => {
-  test("missingNodeIds lists dangling edge endpoints", () => {
+describe("unresolved endpoints", () => {
+  test("unresolvedNodeIds lists endpoints no provider supplies", () => {
     const graph: Graph = {
       nodes: {
         b: { id: "b", type: "loop", inputs: {} },
@@ -262,7 +264,53 @@ describe("missing endpoints", () => {
         },
       },
     }
-    expect(missingNodeIds(graph)).toEqual(["ghost"])
+    expect(unresolvedNodeIds(graphSource(graph))).toEqual(["ghost"])
+    const remote = nodeMapProvider({ ghost: { id: "ghost", type: "notation", inputs: {} } })
+    const layered = { ...graphSource(graph), nodes: layeredNodes(graphSource(graph).nodes, remote) }
+    expect(unresolvedNodeIds(layered)).toEqual([])
+    expect(graphWithUnresolvedStubs(graphSource(graph)).nodes.ghost?.type).toBe("(unresolved)")
+    expect(graphWithUnresolvedStubs(layered).nodes.ghost?.type).toBe("notation")
+  })
+})
+
+describe("graph edits", () => {
+  const before: Graph = {
+    nodes: {
+      a: { id: "a", type: "literal", title: "A", inputs: { value: 1 } },
+      b: { id: "b", type: "output", inputs: {} },
+    },
+    edges: { e1: { from: { node: "a", port: "value" }, to: { node: "b", port: "value" } } },
+  }
+
+  test("diffGraphs round-trips through applyGraphEdits", () => {
+    const after: Graph = {
+      nodes: {
+        a: { id: "a", type: "literal", inputs: { value: 2 } },
+        c: { id: "c", type: "literal", inputs: {} },
+      },
+      edges: { e2: { from: { node: "c", port: "value" }, to: { node: "a", port: "value" } } },
+    }
+    const edits = diffGraphs(before, after)
+    expect(edits.map((e) => e.kind)).toEqual([
+      "removeEdge",
+      "removeNode",
+      "updateNode",
+      "addNode",
+      "putEdge",
+    ])
+    expect(applyGraphEdits(before, edits)).toEqual(after)
+  })
+
+  test("no changes yields no edits and the same graph", () => {
+    expect(diffGraphs(before, before)).toEqual([])
+    expect(applyGraphEdits(before, [])).toBe(before)
+  })
+
+  test("edits to nodes the document does not hold are skipped", () => {
+    const next = applyGraphEdits(before, [
+      { kind: "updateNode", nodeId: "remote", patch: { title: "x" } },
+    ])
+    expect(next.nodes.remote).toBeUndefined()
   })
 })
 
