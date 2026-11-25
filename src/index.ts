@@ -19,7 +19,7 @@ export {
   formatLiteralValue,
   parseLiteralText,
   shouldShowPortLiteralInput,
-  isLiteralEditableSignalType,
+  isLiteralEditableType,
   literalEditorKind,
   type LiteralEditorKind,
 } from "./edit/literals"

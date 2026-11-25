@@ -6,14 +6,14 @@ import type {
   Node,
   NodeId,
   NodeTypeId,
-  SignalType,
+  Type,
 } from "imp-core-types"
 
 /** Node field changes. `null` clears an optional field. */
 export type NodePatch = {
   type?: NodeTypeId
   title?: string | null
-  typeArgs?: SignalType[] | null
+  typeArgs?: Type[] | null
   inputs?: InputValues
 }
 

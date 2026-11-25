@@ -32,7 +32,7 @@ Imp stays free of layout fields; converters inject `{0,0}` and drop positions on
 - **fitViewKey:** optional host load identity; when set, `fitViewOnLoad` runs only when that key changes (open / new tab), not on every topology edit or undo.
 - **Precise ports:** singleton connect replaces inbound; variadic expands filled slots + dummy append with `Edge.order`; reorder filled slots rewrites `0..n-1`.
 - **Titles:** converters preserve optional `title` / `typeArgs`; `setNodeTitle` / titled `addImpNode` helpers; node header shows `title ?? id`.
-- **Literals:** `setNodeInputLiteral`; on-node editors for unconnected singleton scalar/`any` ports (host supplies `CatalogInputPort.signalType`); hosts may also edit literals in a Properties pane.
+- **Literals:** `setNodeInputLiteral`; on-node editors for unconnected singleton scalar/`any` ports (host supplies `CatalogInputPort.type`); hosts may also edit literals in a Properties pane.
 - **Unresolved endpoints:** edge endpoints no provider resolves render as `(unresolved)` stub cards (never emitted as nodes). Required so React Flow does not crash on incomplete graphs. Hosts lay them out with `graphWithUnresolvedStubs(source)`.
 - **Add node:** with `addableNodeTypes` (and `onEdit`, not `readOnly`), Shift+A over the canvas, double-click on empty canvas, the + control, or `ref.openAddNode()` opens a `SearchModal` of node types. The pick emits an `addNode` edit, an `onLayoutChange` placing it under the pointer (or centered), and selects it once echoed. Hosts without layout persistence still see it where it was placed until their layout covers it.
 - **Deferred:** Simple auto-pair mode.

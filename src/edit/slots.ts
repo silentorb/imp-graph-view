@@ -3,7 +3,7 @@ import type {
   Graph,
   PortId,
   PrimitiveValue,
-  SignalType,
+  Type,
 } from "imp-core-types"
 import {
   encodeDummyHandle,
@@ -14,8 +14,8 @@ import {
 export type CatalogInputPort = {
   id: PortId
   variadic?: boolean
-  /** Catalog signal type when the host knows it (literal editors). */
-  signalType?: SignalType
+  /** Catalog type when the host knows it (literal editors). */
+  type?: Type
   /** Catalog default when the host knows it (empty-field display hint). */
   defaultValue?: PrimitiveValue
 }
@@ -31,7 +31,7 @@ export type InputSlot =
       portId: string
       handleId: string
       label: string
-      signalType?: SignalType
+      type?: Type
       defaultValue?: PrimitiveValue
     }
   | {
@@ -110,7 +110,7 @@ export function expandInputSlots(
         portId: port.id,
         handleId: encodeSingletonHandle(port.id),
         label: port.id,
-        signalType: port.signalType,
+        type: port.type,
         defaultValue: port.defaultValue,
       })
       continue

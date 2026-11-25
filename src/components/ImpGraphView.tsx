@@ -30,7 +30,7 @@ import {
   type Graph,
   type GraphSource,
   type PrimitiveValue,
-  type SignalType,
+  type Type,
 } from "imp-core-types"
 import { impToReactFlow, reactFlowToImp } from "../convert"
 import {
@@ -244,7 +244,7 @@ function flowNodeFromParts(
   prevSelected: Map<string, boolean>,
   unresolved: boolean,
   title?: string,
-  typeArgs?: SignalType[],
+  typeArgs?: Type[],
 ): ImpFlowNode {
   const ports = resolvePorts(impType, id, edges)
   const inputSlots = expandInputSlots(ports.inputs, graph, id)
@@ -420,7 +420,7 @@ function ImpGraphViewInner({
         const data: {
           inputValues: ImpNodeData["inputValues"]
           title?: string
-          typeArgs?: SignalType[]
+          typeArgs?: Type[]
         } = {
           inputValues: n.data.inputValues,
         }

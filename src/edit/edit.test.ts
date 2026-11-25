@@ -5,7 +5,7 @@ import { concreteType, typeVar } from "imp-core-types"
 import { addImpNode } from "./addNode"
 import {
   formatLiteralValue,
-  isLiteralEditableSignalType,
+  isLiteralEditableType,
   parseLiteralText,
   shouldShowPortLiteralInput,
 } from "./literals"
@@ -147,33 +147,33 @@ describe("setNodeInputLiteral", () => {
 })
 
 describe("literal helpers", () => {
-  test("isLiteralEditableSignalType hides containers", () => {
-    expect(isLiteralEditableSignalType(concreteType("string"))).toBe(true)
-    expect(isLiteralEditableSignalType(concreteType("any"))).toBe(true)
-    expect(isLiteralEditableSignalType(typeVar("T"))).toBe(true)
-    expect(isLiteralEditableSignalType(undefined)).toBe(true)
-    expect(isLiteralEditableSignalType(concreteType("list"))).toBe(false)
-    expect(isLiteralEditableSignalType(concreteType("collection"))).toBe(false)
+  test("isLiteralEditableType hides containers", () => {
+    expect(isLiteralEditableType(concreteType("string"))).toBe(true)
+    expect(isLiteralEditableType(concreteType("any"))).toBe(true)
+    expect(isLiteralEditableType(typeVar("T"))).toBe(true)
+    expect(isLiteralEditableType(undefined)).toBe(true)
+    expect(isLiteralEditableType(concreteType("list"))).toBe(false)
+    expect(isLiteralEditableType(concreteType("collection"))).toBe(false)
   })
 
   test("shouldShowPortLiteralInput requires unconnected singleton", () => {
     expect(
       shouldShowPortLiteralInput(
-        { signalType: concreteType("string") },
+        { type: concreteType("string") },
         [],
         "label",
       ),
     ).toBe(true)
     expect(
       shouldShowPortLiteralInput(
-        { signalType: concreteType("string") },
+        { type: concreteType("string") },
         ["label"],
         "label",
       ),
     ).toBe(false)
     expect(
       shouldShowPortLiteralInput(
-        { variadic: true, signalType: concreteType("any") },
+        { variadic: true, type: concreteType("any") },
         [],
         "items",
       ),

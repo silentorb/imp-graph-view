@@ -1,6 +1,6 @@
 import { memo, useCallback, type DragEvent } from "react"
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
-import type { InputValues, PrimitiveValue, SignalType } from "imp-core-types"
+import type { InputValues, PrimitiveValue, Type } from "imp-core-types"
 import {
   formatLiteralValue,
   literalEditorKind,
@@ -17,7 +17,7 @@ export type ImpNodeData = {
   /** Optional Imp display title; header falls back to node id. */
   title?: string
   /** Preserved Imp type arguments for round-trip. */
-  typeArgs?: SignalType[]
+  typeArgs?: Type[]
   /** Present when no node provider supplies this edge endpoint (stub card, never emitted). */
   unresolved?: boolean
   /** Port ids that currently have an inbound edge. */
@@ -140,13 +140,13 @@ function ImpNodeComponent({ id, data }: NodeProps<ImpFlowNode>) {
               shouldShowPortLiteralInput(
                 {
                   variadic: false,
-                  signalType: slot.signalType,
+                  type: slot.type,
                 },
                 connectedInputPorts,
                 slot.portId,
               )
             const kind = showLiteral
-              ? literalEditorKind(slot.signalType)
+              ? literalEditorKind(slot.type)
               : null
             const stored = data.inputValues[slot.portId]
 
@@ -202,7 +202,7 @@ function ImpNodeComponent({ id, data }: NodeProps<ImpFlowNode>) {
                     onChange={(event) => {
                       const next = parseLiteralText(
                         event.currentTarget.value,
-                        slot.signalType,
+                        slot.type,
                       )
                       data.onInputLiteralChange?.(id, slot.portId, next)
                     }}
