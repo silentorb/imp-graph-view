@@ -1,6 +1,7 @@
 import {
   isConcreteType,
   isTypeVar,
+  isUnionType,
   type PrimitiveValue,
   type Type,
 } from "imp-core-types"
@@ -15,7 +16,8 @@ const NON_SCALAR_TYPE_IDS = new Set([
 
 /**
  * Whether a port's type can have an on-node / Properties literal editor.
- * Type-vars and `any` are editable; concrete container types are not.
+ * Type-vars and `any` are editable; concrete container types are not. A union is editable only
+ * when every member is.
  */
 export function isLiteralEditableType(
   type: Type | undefined,
@@ -26,6 +28,9 @@ export function isLiteralEditableType(
   }
   if (isTypeVar(type)) {
     return true
+  }
+  if (isUnionType(type)) {
+    return type.union.every(isLiteralEditableType)
   }
   if (!isConcreteType(type)) {
     return false

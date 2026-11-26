@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Graph } from "imp-core-types"
 import type { Edge as RfEdge } from "@xyflow/react"
-import { concreteType, typeVar } from "imp-core-types"
+import { concreteType, typeVar, unionOf } from "imp-core-types"
 import { addImpNode } from "./addNode"
 import {
   formatLiteralValue,
@@ -154,6 +154,8 @@ describe("literal helpers", () => {
     expect(isLiteralEditableType(undefined)).toBe(true)
     expect(isLiteralEditableType(concreteType("list"))).toBe(false)
     expect(isLiteralEditableType(concreteType("collection"))).toBe(false)
+    expect(isLiteralEditableType(unionOf(concreteType("string"), concreteType("number")))).toBe(true)
+    expect(isLiteralEditableType(unionOf(concreteType("string"), concreteType("list")))).toBe(false)
   })
 
   test("shouldShowPortLiteralInput requires unconnected singleton", () => {
